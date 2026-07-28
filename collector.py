@@ -3,6 +3,7 @@ from email.utils import parsedate_to_datetime
 import os
 import re
 import urllib.parse
+import json
 import pandas as pd
 import requests
 import urllib3
@@ -33,13 +34,8 @@ TRUSTED_SOURCES = [
     "hani.co.kr", "khan.co.kr"
 ]
 
-# ★ [재정의된 카테고리별 타겟 검색어]
-HR_SEARCH_TARGETS = {
-    "HR 트렌드 & HR Tech": "HR AI OR HR테크 OR HR기술 OR 인사시스템 OR 디지털인사",
-    "노무 · 근로기준법 · 고용노동부": "근로기준법 OR 고용노동부 OR 임금 OR 최저임금 OR 노동법 OR 노사",
-    "채용 트렌드 및 이슈": "채용 OR 이직 OR 비정규직 OR 실업률 OR 고용동향 OR 인재채용",
-    "조직문화 & 근무제도": "조직문화 OR 근무제도 OR 재택근무 OR 기업문화 OR HRD OR 유연근무",
-}
+# HR/인사 전체 영역을 망라하는 광범위 검색어 (100건 수집용)
+BROAD_SEARCH_QUERY = "HR OR 인사관리 OR 근로기준법 OR 채용 OR 조직문화 OR 고용노동부"
 
 
 # ==========================================
@@ -58,36 +54,56 @@ def clean_text(text):
     )
 
 
-def summarize_with_gpt(category, title, raw_description):
+def classify_and_summarize_with_gpt(title, raw_description):
+    """
+    GPT를 이용하여 기사의 최적 카테고리를 자동 분류하고 1~2줄 요약문을 생성합니다.
+    """
+    default_res = {
+        "category": "HR 트렌드 & HR Tech",
+        "description": raw_description
+    }
+
     if not client or not OPENAI_API_KEY:
-        return raw_description
+        return default_res
 
     try:
         prompt = f"""
-다음은 [{category}] 영역의 HR/노무 뉴스 기사입니다.
-게임/플랫폼 기업의 **HR 인사담당자가 꼭 알아야 할 핵심 메시지 및 실무적 영향**을 중심으로 1~2문장(80~120자 내외)의 요약문으로 작성해 주세요.
+다음 뉴스 기사의 내용에 가장 부합하는 카테고리를 아래 4개 중 '하나만' 선택하고, 게임/플랫폼 기업 인사담당자 관점에서 1~2문장(80~120자 내외)의 실무 요약문을 작성해 주세요.
 
-- 카테고리: {category}
-- 기사 제목: {title}
-- 원문 개요: {raw_description}
+[선택할 카테고리 목록]
+1. HR 트렌드 & HR Tech (AI, HR테크, 디지털 인사, 신규 인사 시스템 등)
+2. 노무 · 근로기준법 · 고용노동부 (근로기준법, 고용부 지침, 임금, 휴일 개정, 노사관계 등)
+3. 채용 트렌드 및 이슈 (채용, 이직, 비정규직, 실업률, 고용동향 등)
+4. 조직문화 & 근무제도 (재택/유연근무, 기업문화, HRD/교육, 리더십 등)
 
-[주의사항]
-1. 제목 단순 반복 금지.
-2. 실무적 관점('~에 따른 대비 필요', '~ 경향 확대' 등)으로 서술.
-3. 결과 텍스트만 출력.
+[기사 정보]
+- 제목: {title}
+- 본문 개요: {raw_description}
+
+[응답 형식]
+반드시 아래 JSON 형식으로만 출력해 주세요:
+{{"category": "선택한 카테고리명", "description": "실무 요약문"}}
 """
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "당신은 게임/플랫폼 업계 전문 HR 아날리스트입니다."},
+                {"role": "system", "content": "당신은 HR 기사를 분류하고 요약하는 전문가입니다."},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.4,
-            max_tokens=200,
+            temperature=0.3,
+            max_tokens=250,
+            response_format={"type": "json_object"}
         )
-        return response.choices[0].message.content.strip()
-    except Exception:
-        return raw_description
+        
+        result_content = response.choices[0].message.content.strip()
+        data = json.loads(result_content)
+        return {
+            "category": data.get("category", "HR 트렌드 & HR Tech"),
+            "description": data.get("description", raw_description)
+        }
+    except Exception as e:
+        print(f"⚠️ GPT 분류/요약 실패 ({title[:15]}...): {e}")
+        return default_res
 
 
 def calculate_score(item):
@@ -119,53 +135,53 @@ def fetch_top_hr_news(limit_total=10):
     now = datetime.now(kst)
     cutoff_date = now - timedelta(days=2)  # 최근 2일(48시간) 이내 기준 엄격 유지
 
-    print(f"🔎 카테고리별 최신 HR 뉴스 검색 시작... (2일 이내 기준: {cutoff_date.strftime('%Y-%m-%d %H:%M')} 이후)")
+    print(f"🔎 최근 2일 이내의 모든 HR/인사 관련 뉴스 싹 끌어오는 중... (기준: {cutoff_date.strftime('%Y-%m-%d %H:%M')} 이후)")
     
-    for category, query in HR_SEARCH_TARGETS.items():
-        encoded_query = urllib.parse.quote(query)
-        url = f"https://openapi.naver.com/v1/search/news.json?query={encoded_query}&display=40&sort=date"
-        headers = {
-            "X-Naver-Client-Id": CLIENT_ID,
-            "X-Naver-Client-Secret": CLIENT_SECRET,
-        }
+    # 통검 키워드로 최신순 100개 검색
+    encoded_query = urllib.parse.quote(BROAD_SEARCH_QUERY)
+    url = f"https://openapi.naver.com/v1/search/news.json?query={encoded_query}&display=100&sort=date"
+    headers = {
+        "X-Naver-Client-Id": CLIENT_ID,
+        "X-Naver-Client-Secret": CLIENT_SECRET,
+    }
 
-        res = requests.get(url, headers=headers, verify=False)
-        if res.status_code == 200:
-            for item in res.json().get("items", []):
-                pub_date_str = item.get("pubDate", "")
+    res = requests.get(url, headers=headers, verify=False)
+    if res.status_code == 200:
+        for item in res.json().get("items", []):
+            pub_date_str = item.get("pubDate", "")
+            
+            try:
+                pub_dt = parsedate_to_datetime(pub_date_str)
+                if pub_dt.tzinfo is None:
+                    pub_dt = pub_dt.replace(tzinfo=kst)
                 
-                try:
-                    pub_dt = parsedate_to_datetime(pub_date_str)
-                    if pub_dt.tzinfo is None:
-                        pub_dt = pub_dt.replace(tzinfo=kst)
-                    
-                    if pub_dt < cutoff_date:
-                        continue
-                except Exception:
+                # 2일 초과 기사 제거
+                if pub_dt < cutoff_date:
                     continue
+            except Exception:
+                continue
 
-                title = clean_text(item["title"])
-                raw_desc = clean_text(item.get("description", ""))
+            title = clean_text(item["title"])
+            raw_desc = clean_text(item.get("description", ""))
 
-                # 인사발령, 단순 부음 등 가비지 데이터 제외
-                if any(bad in title for bad in ["인사발령", "부음", "동정", "부고", "승진", "특가"]):
-                    continue
+            # 노이즈 기사 제외
+            if any(bad in title for bad in ["인사발령", "부음", "동정", "부고", "승진", "특가", "부동산"]):
+                continue
 
-                score = calculate_score(item)
-                raw_articles.append({
-                    "category": category,
-                    "title": title,
-                    "raw_desc": raw_desc,
-                    "link": item.get("originallink") or item["link"],
-                    "pubDate": item["pubDate"],
-                    "pub_dt": pub_dt,
-                    "score": score,
-                })
+            score = calculate_score(item)
+            raw_articles.append({
+                "title": title,
+                "raw_desc": raw_desc,
+                "link": item.get("originallink") or item["link"],
+                "pubDate": item["pubDate"],
+                "pub_dt": pub_dt,
+                "score": score,
+            })
 
     # 최신 날짜순 > 출처 점수순 정렬
     raw_articles.sort(key=lambda x: (x["pub_dt"], x["score"]), reverse=True)
 
-    # 중복 제거
+    # 중복 기사 제거
     unique_articles = []
     for art in raw_articles:
         duplicate = False
@@ -179,14 +195,16 @@ def fetch_top_hr_news(limit_total=10):
         if len(unique_articles) >= limit_total:
             break
 
-    print(f"\n🤖 최근 2일 내 수집된 기사 {len(unique_articles)}건 GPT 요약 진행 중...")
+    print(f"\n🤖 최근 2일 내 수집된 기사 {len(unique_articles)}건 GPT AI 카테고리 분류 & 요약 중...")
     final_articles = []
     for art in unique_articles:
-        gpt_summary = summarize_with_gpt(art["category"], art["title"], art["raw_desc"])
+        # GPT가 기사 내용을 읽고 카테고리 지정 + 요약
+        ai_res = classify_and_summarize_with_gpt(art["title"], art["raw_desc"])
+        
         final_articles.append({
-            "category": art["category"],
+            "category": ai_res["category"],
             "title": art["title"],
-            "description": gpt_summary,
+            "description": ai_res["description"],
             "link": art["link"],
             "pubDate": art["pubDate"],
             "collected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -195,7 +213,7 @@ def fetch_top_hr_news(limit_total=10):
     df = pd.DataFrame(final_articles)
     if not df.empty:
         df.to_csv("hr_news.csv", index=False, encoding="utf-8-sig")
-        print(f"🎉 [성공] 분류된 최신 뉴스 {len(df)}건을 hr_news.csv에 저장했습니다!")
+        print(f"🎉 [성공] AI 자동 분류 완료된 최신 뉴스 {len(df)}건을 hr_news.csv에 저장했습니다!")
     else:
         print("⚠️ 최근 2일 이내 조건에 맞는 최신 뉴스가 없습니다.")
 
