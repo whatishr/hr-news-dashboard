@@ -12,11 +12,9 @@ jobs:
       contents: write
 
     steps:
-      # [수정] 최신 v4 버전으로 변경 (Node deprecation 에러 해결)
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
 
-      # [수정] 최신 v5 버전으로 변경
       - name: Python 환경 설정
         uses: actions/setup-python@v5
         with:
@@ -35,11 +33,10 @@ jobs:
         run: |
           python collector.py
 
-      - name: 변경된 hr_news.csv 자동 커밋 및 푸시
+      - name: 변경된 hr_news.csv 강제 자동 커밋 및 푸시
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git checkout main
           git add hr_news.csv
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: hr_news.csv via GitHub Actions" && git push origin main)
+          # 변경사항이 있을 때만 커밋 후 강제 푸시(--force)로 충돌 완전 방지
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: hr_news.csv via GitHub Actions" && git push --force origin main)
