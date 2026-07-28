@@ -9,7 +9,7 @@ jobs:
   collect-and-commit:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # ★ 자동 커밋/푸시를 위한 필수 권한 설정 ★
+      contents: write
 
     steps:
       - name: 저장소 체크아웃
@@ -34,7 +34,10 @@ jobs:
           python collector.py
 
       - name: 변경된 hr_news.csv 자동 커밋 및 푸시
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Auto-update: hr_news.csv via GitHub Actions"
-          file_pattern: "hr_news.csv"
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          git add hr_news.csv
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: hr_news.csv via GitHub Actions" && git push origin main)
