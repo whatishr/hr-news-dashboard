@@ -15,7 +15,7 @@ jobs:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 모든 히스토리를 가져와서 rebase 충돌 방지
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Python 환경 설정
         uses: actions/setup-python@v5
@@ -35,11 +35,9 @@ jobs:
         run: |
           python collector.py
 
+      # [핵심] 충돌 없는 전용 자동 커밋 모듈 사용
       - name: 변경된 hr_news.csv 자동 커밋 및 푸시
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add hr_news.csv
-          # 최신 커밋을 당겨온 뒤 커밋/푸시 진행
-          git pull --rebase origin main
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: hr_news.csv via GitHub Actions" && git push origin main)
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Auto-update: hr_news.csv via GitHub Actions"
+          file_pattern: "hr_news.csv"
