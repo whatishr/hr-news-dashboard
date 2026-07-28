@@ -10,7 +10,7 @@ from openai import OpenAI
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# API 키 및 설정 (기존과 동일)
+# (API 키 및 기본 설정은 동일)
 CLIENT_ID = (
     os.getenv("CLIENT_ID")
     or os.getenv("NAVER_CLIENT_ID")
@@ -102,14 +102,13 @@ def is_similar(title1, title2):
 def fetch_top_hr_news(limit_total=10):
     raw_articles = []
     
-    # ★ 2일(48시간) 이내 기사 기준 설정
+    # 2일(48시간) 이내 기준 엄격 설정
     now = datetime.now()
     two_days_ago = now - timedelta(days=2)
 
     for category, query in HR_SEARCH_TARGETS.items():
         encoded_query = urllib.parse.quote(query)
-        
-        # ★ sort=date 로 변경하여 최신순으로 가져옴
+        # sort=date (최신순)
         url = f"https://openapi.naver.com/v1/search/news.json?query={encoded_query}&display=30&sort=date"
         headers = {
             "X-Naver-Client-Id": CLIENT_ID,
@@ -119,15 +118,18 @@ def fetch_top_hr_news(limit_total=10):
         res = requests.get(url, headers=headers, verify=False)
         if res.status_code == 200:
             for item in res.json().get("items", []):
-                # ★ pubDate 파싱 및 2일 이내 검증
                 pub_date_str = item.get("pubDate", "")
+                
+                # ★ [강력해진 날짜 필터] 
+                # 파싱 실패하거나 2일 초과된 기사는 무조건 continue 처리
                 try:
-                    # 네이버 API 날짜 포맷 (예: Mon, 27 Jul 2026 14:00:00 +0900)
                     pub_dt = parsedate_to_datetime(pub_date_str).replace(tzinfo=None)
                     if pub_dt < two_days_ago:
-                        continue  # 2일보다 오래된 기사는 버림
-                except Exception:
-                    pass  # 파싱 실패 시 일단 통과
+                        print(f"🚫 [2일 경과로 제외됨] {clean_text(item['title'])} ({pub_dt})")
+                        continue
+                except Exception as e:
+                    print(f"⚠️ 날짜 파싱 오류로 제외 처리: {pub_date_str}")
+                    continue  # 예외 발생 시 무조건 차단!
 
                 title = clean_text(item["title"])
                 raw_desc = clean_text(item.get("description", ""))
@@ -145,7 +147,7 @@ def fetch_top_hr_news(limit_total=10):
                     "score": score,
                 })
 
-    # 점수 높은 순으로 정렬 후 중복 제거
+    # 최신성 및 스코어 정렬
     raw_articles.sort(key=lambda x: x["score"], reverse=True)
 
     unique_articles = []
@@ -161,7 +163,7 @@ def fetch_top_hr_news(limit_total=10):
         if len(unique_articles) >= limit_total:
             break
 
-    print(f"🤖 2일 이내 수집된 신규 뉴스 {len(unique_articles)}건 GPT 요약 시작...")
+    print(f"\n🤖 최근 2일 내 수집된 기사 {len(unique_articles)}건 GPT 요약 진행...")
     final_articles = []
     for art in unique_articles:
         gpt_summary = summarize_with_gpt(art["title"], art["raw_desc"])
@@ -177,9 +179,9 @@ def fetch_top_hr_news(limit_total=10):
     df = pd.DataFrame(final_articles)
     if not df.empty:
         df.to_csv("hr_news.csv", index=False, encoding="utf-8-sig")
-        print(f"🎉 [성공] 최신 2일 이내 뉴스 {len(df)}건을 저장했습니다!")
+        print(f"🎉 [성공] 2일 이내 최신 뉴스 {len(df)}건 검증 및 저장 완료!")
     else:
-        print("⚠️ 최근 2일 이내에 수집된 관련 뉴스가 없습니다.")
+        print("⚠️ 최근 2일 이내 조건에 맞는 신규 뉴스가 없습니다.")
 
 if __name__ == "__main__":
     fetch_top_hr_news(limit_total=10)
