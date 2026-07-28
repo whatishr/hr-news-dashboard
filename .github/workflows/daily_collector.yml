@@ -12,9 +12,11 @@ jobs:
       contents: write
 
     steps:
+      # [수정] 최신 v4 버전으로 변경 (Node deprecation 에러 해결)
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
 
+      # [수정] 최신 v5 버전으로 변경
       - name: Python 환경 설정
         uses: actions/setup-python@v5
         with:
