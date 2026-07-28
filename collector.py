@@ -28,13 +28,24 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
+# ★ [검증된 주요 언론사 도메인 리스트] - 이 출처가 아니면 무조건 제외
 TRUSTED_SOURCES = [
-    "hankyung.com", "mk.co.kr", "sedaily.com", "chosun.com", "joongang.co.kr",
-    "donga.com", "etnews.com", "e27.co.kr", "worklaw.co.kr", "laborplus.co.kr",
-    "hani.co.kr", "khan.co.kr"
+    "hankyung.com",   # 한국경제
+    "mk.co.kr",        # 매일경제
+    "sedaily.com",     # 서울경제
+    "chosun.com",      # 조선일보
+    "joongang.co.kr",  # 중앙일보
+    "donga.com",       # 동아일보
+    "etnews.com",      # 전자신문
+    "worklaw.co.kr",   # 월간노동법률
+    "laborplus.co.kr", # 레이버플러스
+    "hani.co.kr",      # 한겨레
+    "khan.co.kr",      # 경향신문
+    "yna.co.kr",       # 연합뉴스
+    "newsis.com"       # 뉴시스
 ]
 
-# ★ HR / 인사관리 / 노무 / 노사 / 노동법 본질에 집중된 키워드 세트
+# HR / 인사관리 / 노무 / 노사 / 노동법 중심 검색어
 SEARCH_KEYWORDS = [
     "HR 인사관리", 
     "근로기준법 개정", 
@@ -62,9 +73,18 @@ def clean_text(text):
     )
 
 
+def is_trusted_source(link):
+    """
+    기사 링크가 신뢰할 수 있는 매체 도메인을 포함하는지 확인 (하드 필터)
+    """
+    if not link:
+        return False
+    return any(domain in link for domain in TRUSTED_SOURCES)
+
+
 def is_noise_article(title):
     """
-    1차 키워드 단어 검사 (승진, 부고, 지자체 단순 인사발령 등)
+    단순 승진/전보/부고/지자체 발령 명단 기사 차단
     """
     noise_keywords = [
         "인사발령", "부음", "동정", "부고", "승진", "특가", "부동산",
@@ -81,7 +101,7 @@ def is_noise_article(title):
 
 def classify_and_summarize_with_gpt(title, raw_description):
     """
-    GPT를 이용하여 기사가 순수 HR/인사/노무 관련인지 검증하고 카테고리 분류 및 요약 진행
+    GPT를 이용하여 기사가 기업 인사/노무/HR 담당자에게 직접적인 유용한 정보인지 정밀 검증
     """
     default_res = {
         "category": "HR 트렌드 & HR Tech",
@@ -94,17 +114,18 @@ def classify_and_summarize_with_gpt(title, raw_description):
 
     try:
         prompt = f"""
-다음 뉴스 기사가 기업의 **HR/인사/노무/노사/근로제도**와 직접적인 관련이 있는지 평가하고, 적절한 카테고리를 선택해 주세요.
+당신은 게임/플랫폼 기업의 HR 전문위원입니다.
+다음 뉴스 기사가 기업의 **HR, 인사관리, 노무, 노사관계, 노동법, 조직문화**와 직접적인 관련이 있고 인사담당자에게 가치가 있는지 정밀 평가해 주세요.
 
 [판단 기준]
-- 단순 기업의 일반 채용 공고, 단순 사건사고, 지자체 소식 등은 HR/인사 관련성 'False'로 판단할 것.
-- 인사제도, 노동법, 노사관계, 조직문화, HR Tech, 근무제도 등 인사담당자가 숙지해야 할 내용이면 'True'.
+- 단순 기업의 일반 채용 소식, 단발성 사건사고, 지자체 홍보 등은 'False'로 처리.
+- 인사제도 변경, 노동법 개정, 고용부 지침, 노사 이슈, HR Tech 트렌드, 조직문화 변화 등 실무와 직결되면 'True'.
 
 [선택할 카테고리 목록 (관련이 있을 경우)]
-1. HR 트렌드 & HR Tech (AI, HR테크, 디지털 인사, 인사시스템 등)
-2. 노무 · 근로기준법 · 고용노동부 (근로기준법, 고용부 지침, 임금, 휴일, 노사관계, 노동법 등)
-3. 채용 트렌드 및 이슈 (채용 시장 트렌드, 이직, 비정규직, 고용동향 등)
-4. 조직문화 & 근무제도 (재택/유연근무, 기업문화, HRD/교육, 리더십 등)
+1. HR 트렌드 & HR Tech
+2. 노무 · 근로기준법 · 고용노동부
+3. 채용 트렌드 및 이슈
+4. 조직문화 & 근무제도
 
 [기사 정보]
 - 제목: {title}
@@ -112,7 +133,7 @@ def classify_and_summarize_with_gpt(title, raw_description):
 
 [응답 형식]
 JSON 형식으로만 출력하세요:
-{{"is_hr_related": true 또는 false, "category": "선택한 카테고리명", "description": "실무 관점 1~2줄 요약문"}}
+{{"is_hr_related": true 또는 false, "category": "선택한 카테고리명", "description": "인사 실무 관점 1~2줄 핵심 요약"}}
 """
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -120,7 +141,7 @@ JSON 형식으로만 출력하세요:
                 {"role": "system", "content": "당신은 깐깐한 HR 전문 기사 검수자입니다."},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.2,
+            temperature=0.1,
             max_tokens=250,
             response_format={"type": "json_object"}
         )
@@ -133,18 +154,8 @@ JSON 형식으로만 출력하세요:
             "description": data.get("description", raw_description)
         }
     except Exception as e:
-        print(f"⚠️ GPT 분류/요약 실패 ({title[:15]}...): {e}")
+        print(f"⚠️ GPT 검증 실패 ({title[:15]}...): {e}")
         return default_res
-
-
-def calculate_score(item):
-    score = 0
-    link = item.get("originallink", "") or item.get("link", "")
-    if any(domain in link for domain in TRUSTED_SOURCES):
-        score += 50
-    if item.get("originallink"):
-        score += 20
-    return score
 
 
 def is_similar(title1, title2):
@@ -166,7 +177,7 @@ def fetch_top_hr_news(limit_total=10):
     now = datetime.now(kst)
     cutoff_date = now - timedelta(days=2)  # 최근 2일 이내 기준
 
-    print(f"🔎 순수 HR/인사/노무 관련 최신 뉴스 검색 중... (기준: {cutoff_date.strftime('%Y-%m-%d %H:%M')} 이후)")
+    print(f"🔎 신뢰 언론사 대상 최근 2일 이내 HR/인사 전문 뉴스 수집 시작... (기준: {cutoff_date.strftime('%Y-%m-%d %H:%M')} 이후)")
     
     headers = {
         "X-Naver-Client-Id": CLIENT_ID,
@@ -175,7 +186,7 @@ def fetch_top_hr_news(limit_total=10):
 
     for kw in SEARCH_KEYWORDS:
         encoded_query = urllib.parse.quote(kw)
-        url = f"https://openapi.naver.com/v1/search/news.json?query={encoded_query}&display=30&sort=date"
+        url = f"https://openapi.naver.com/v1/search/news.json?query={encoded_query}&display=50&sort=date"
 
         res = requests.get(url, headers=headers, verify=False)
         if res.status_code == 200:
@@ -192,26 +203,31 @@ def fetch_top_hr_news(limit_total=10):
                 except Exception:
                     continue
 
+                link = item.get("originallink") or item.get("link", "")
+                
+                # ★ [필수 조건 1] 신뢰 언론사가 아니면 수집에서 즉시 제외
+                if not is_trusted_source(link):
+                    continue
+
                 title = clean_text(item["title"])
                 raw_desc = clean_text(item.get("description", ""))
 
-                # 단순 발령/승진/부음 노이즈 1차 차단
+                # 단순 발령/승진/부음 차단
                 if is_noise_article(title):
                     continue
 
-                score = calculate_score(item)
                 raw_articles.append({
                     "title": title,
                     "raw_desc": raw_desc,
-                    "link": item.get("originallink") or item["link"],
+                    "link": link,
                     "pubDate": item["pubDate"],
-                    "pub_dt": pub_dt,
-                    "score": score,
+                    "pub_dt": pub_dt
                 })
 
-    # 정렬 및 유사 중복 제거
-    raw_articles.sort(key=lambda x: (x["pub_dt"], x["score"]), reverse=True)
+    # 최신 순 정렬
+    raw_articles.sort(key=lambda x: x["pub_dt"], reverse=True)
 
+    # 중복 기사 제거
     unique_articles = []
     for art in raw_articles:
         duplicate = False
@@ -222,13 +238,13 @@ def fetch_top_hr_news(limit_total=10):
         if not duplicate:
             unique_articles.append(art)
 
-    print(f"\n🤖 {len(unique_articles)}건 대상 GPT 2차 정밀 HR 관련성 검증 및 분류 진행 중...")
+    print(f"📋 1차 언론사 필터를 통과한 {len(unique_articles)}건 대상 GPT 정밀 HR 관련성 검증 시작...")
     final_articles = []
     
     for art in unique_articles:
+        # ★ [필수 조건 2] GPT가 읽고 순수 HR/인사/노무 관련 기사인지 최종 판별
         ai_res = classify_and_summarize_with_gpt(art["title"], art["raw_desc"])
         
-        # GPT 판단 결과 HR/인사/노무와 무관한 기사는 버림
         if not ai_res.get("is_hr_related", True):
             continue
 
@@ -247,9 +263,9 @@ def fetch_top_hr_news(limit_total=10):
     df = pd.DataFrame(final_articles)
     if not df.empty:
         df.to_csv("hr_news.csv", index=False, encoding="utf-8-sig")
-        print(f"🎉 [성공] 정밀 검증된 HR/인사/노무 최신 뉴스 {len(df)}건을 저장했습니다!")
+        print(f"🎉 [성공] 검증된 메이저 언론사의 HR 전문 뉴스 {len(df)}건을 저장했습니다!")
     else:
-        print("⚠️ 최근 2일 이내 조건에 맞는 HR 전문 뉴스가 없습니다.")
+        print("⚠️ 최근 2일 이내 조건에 맞는 신뢰 언론사의 HR 전문 뉴스가 없습니다.")
 
 
 if __name__ == "__main__":
