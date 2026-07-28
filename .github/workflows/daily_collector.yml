@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 모든 히스토리를 가져와서 rebase 충돌 방지
 
       - name: Python 환경 설정
         uses: actions/setup-python@v5
@@ -38,6 +40,6 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add hr_news.csv
-          # 충돌 방지를 위해 push 전 원격의 변경사항을 먼저 당겨오도록 pull 추가
+          # 최신 커밋을 당겨온 뒤 커밋/푸시 진행
           git pull --rebase origin main
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: hr_news.csv via GitHub Actions" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: hr_news.csv via GitHub Actions" && git push origin main)
