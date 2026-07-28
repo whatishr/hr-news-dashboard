@@ -2,7 +2,9 @@ import os
 import pandas as pd
 import streamlit as st
 
+# ==========================================
 # 1. 페이지 기본 설정
+# ==========================================
 st.set_page_config(
     page_title="HR Pulse - 게임/플랫폼 인사 트렌드",
     page_icon="⚡",
@@ -10,7 +12,9 @@ st.set_page_config(
 )
 
 
-# 2. CSV 데이터 로드
+# ==========================================
+# 2. CSV 데이터 로드 및 파싱 함수
+# ==========================================
 @st.cache_data(ttl=300)
 def load_news_data():
     if os.path.exists("hr_news.csv"):
@@ -25,12 +29,12 @@ def load_news_data():
 df = load_news_data()
 
 
-# 뉴스 데이터 파싱 도구 (컬럼명 유연 대응, 태그 제거 및 예외 처리)
 def get_news_item(df_data, index):
+    """CSV 데이터에서 실제 뉴스 정보를 안전하게 추출하는 함수"""
     if df_data is not None and len(df_data) > index:
         row = df_data.iloc[index]
 
-        # 1) 제목 컬럼 감지
+        # 1) 제목 파싱
         title_val = row.get("title", row.get("제목", "뉴스 제목이 없습니다."))
         title = (
             str(title_val)
@@ -42,23 +46,26 @@ def get_news_item(df_data, index):
             .replace("&gt;", ">")
         )
 
-        # 2) 링크 컬럼 감지
+        # 2) 원문 링크 파싱
         link_val = row.get(
             "link", row.get("originallink", row.get("url", "https://news.naver.com"))
         )
-        link = str(link_val) if str(link_val).startswith("http") else f"https://{link_val}"
+        link = (
+            str(link_val)
+            if str(link_val).startswith("http")
+            else f"https://{link_val}"
+        )
 
-        # 3) 요약 본문 컬럼 유연 감지 (description, summary, content, 요약, 본문 대응)
+        # 3) 진짜 요약 데이터 파싱 (제목 복붙하는 예외 로직 완전 제거)
         desc_val = None
         for col_name in ["description", "summary", "content", "요약", "본문", "desc"]:
             if col_name in row.index and pd.notna(row[col_name]):
-                desc_val = str(row[col_name]).strip()
-                if desc_val:
+                temp = str(row[col_name]).strip()
+                if temp and temp.lower() != "nan":
+                    desc_val = temp
                     break
 
-        if not desc_val or desc_val.lower() == "nan":
-            desc = f"'{title}' 기사의 주요 내용입니다. 자세한 내용은 원문을 참고해 주세요."
-        else:
+        if desc_val:
             desc = (
                 desc_val.replace("<b>", "")
                 .replace("</b>", "")
@@ -67,13 +74,19 @@ def get_news_item(df_data, index):
                 .replace("&lt;", "<")
                 .replace("&gt;", ">")
             )
+        else:
+            # CSV에 요약문(description) 데이터가 비어있을 경우 최소한의 수집 안내만 표시
+            desc = "상세 요약 내용이 제공되지 않는 기사입니다. 원문 링크를 통해 확인해 주세요."
 
-        # 4) 언론사/출처 컬럼 감지
-        source_val = row.get("press", row.get("source", row.get("언론사", "네이버뉴스")))
+        # 4) 언론사/출처 파싱
+        source_val = row.get(
+            "press", row.get("source", row.get("언론사", "네이버뉴스"))
+        )
         source = str(source_val)
 
         return title, link, desc, source
 
+    # 데이터가 부족하거나 없을 때의 Fallback
     return (
         f"최신 HR 트렌드 이슈 #{index+1}",
         "https://news.naver.com",
@@ -82,11 +95,13 @@ def get_news_item(df_data, index):
     )
 
 
-# 3. 트렌디한 CSS 적용 (상단 잘림 해결 & 폰트 위계 재설정)
+# ==========================================
+# 3. CSS 적용 (상단 여백 & 폰트 위계 반영)
+# ==========================================
 st.markdown(
     """
     <style>
-    /* [수정] 상단 여백 조정을 통한 잘림 방지 */
+    /* 상단 잘림 방지용 패딩 조정 */
     .block-container {
         padding-top: 3.5rem !important;
         padding-bottom: 2rem !important;
@@ -115,7 +130,7 @@ st.markdown(
         margin-top: 4px;
     }
 
-    /* [수정] 상단 슬림 요약 카드 (상위 위계: 폰트 확충) */
+    /* 상단 핵심 요약 카드 (상위 위계 폰트 적용) */
     .top-card {
         background: #ffffff;
         border: 1px solid #e2e8f0;
@@ -167,7 +182,7 @@ st.markdown(
         border-radius: 6px;
     }
 
-    /* 하단 섹션 격자 박스 */
+    /* 하단 섹션 박스 */
     .section-box {
         background: #ffffff;
         border: 1px solid #e2e8f0;
@@ -213,14 +228,13 @@ st.markdown(
         background: #ffffff;
     }
     
-    /* [수정] 호버 카드 폰트 위계 조정 (서브 위계) */
     .hover-title {
         font-size: 13.5px;
         font-weight: 700;
         color: #1e293b;
     }
 
-    /* 호버 시 펼쳐지는 요약문 영역 */
+    /* 호버 시 펼쳐지는 요약문 영역 (서브 위계 폰트 적용) */
     .hover-details {
         max-height: 0;
         opacity: 0;
@@ -257,9 +271,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ---------------------------------------------------------
+# ==========================================
+# 4. 화면 레이아웃 구성
+# ==========================================
+
 # [1] 메인 타이틀
-# ---------------------------------------------------------
 st.markdown(
     """
 <div class="header-container">
@@ -278,9 +294,7 @@ t3, l3, d3, s3 = get_news_item(df, 3)
 t4, l4, d4, s4 = get_news_item(df, 4)
 t5, l5, d5, s5 = get_news_item(df, 5)
 
-# ---------------------------------------------------------
-# [2] 상단 핵심 브리핑 (실제 수집 뉴스 연동)
-# ---------------------------------------------------------
+# [2] 상단 핵심 브리핑 (3컬럼)
 c1, c2, c3 = st.columns(3)
 
 with c1:
@@ -333,9 +347,7 @@ with c3:
 
 st.write("")
 
-# ---------------------------------------------------------
-# [3] 하단 4분할 격자 박스
-# ---------------------------------------------------------
+# [3] 하단 4분할 격자 박스 (좌/우 2컬럼)
 col_left, col_right = st.columns(2)
 
 with col_left:
