@@ -9,13 +9,13 @@ jobs:
   collect-and-commit:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write  # 자동 커밋을 위한 쓰기 권한
 
     steps:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: ${{ github.head_ref }}
 
       - name: Python 환경 설정
         uses: actions/setup-python@v5
@@ -35,20 +35,9 @@ jobs:
         run: |
           python collector.py
 
-      - name: 변경된 hr_news.csv 안전하게 커밋 및 푸시
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # 1. 새로 생성된 hr_news.csv를 임시 저장소(stash)에 보관
-          git stash push hr_news.csv
-          
-          # 2. 최신 원격 main 브랜치 상태로 동기화
-          git pull --rebase origin main
-          
-          # 3. 보관해둔 hr_news.csv 복원
-          git stash pop || true
-          
-          # 4. 스테이징 후 커밋 & 푸시
-          git add hr_news.csv
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto: 매일 HR 뉴스 갱신 [skip ci]" && git push origin main)
+      # [핵심] 직접 git push하지 않고 전용 액션에 맡겨 충돌을 완벽 방지합니다.
+      - name: 변경된 hr_news.csv 자동 커밋 및 푸시
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Auto: 매일 HR 뉴스 갱신 [skip ci]"
+          file_pattern: "hr_news.csv"
