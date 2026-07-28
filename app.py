@@ -1,13 +1,14 @@
-import streamlit as st
-import pandas as pd
 import os
+import pandas as pd
+import streamlit as st
 
 # 1. 페이지 기본 설정
 st.set_page_config(
     page_title="HR Pulse - 게임/플랫폼 인사 트렌드",
     page_icon="⚡",
-    layout="wide"
+    layout="wide",
 )
+
 
 # 2. CSV 데이터 로드
 @st.cache_data(ttl=300)
@@ -20,22 +21,72 @@ def load_news_data():
             return None
     return None
 
+
 df = load_news_data()
 
-# 뉴스 데이터 파싱 도구 (태그 제거 및 예외 처리)
+
+# 뉴스 데이터 파싱 도구 (컬럼명 유연 대응, 태그 제거 및 예외 처리)
 def get_news_item(df_data, index):
     if df_data is not None and len(df_data) > index:
         row = df_data.iloc[index]
-        title = str(row.get('title', '뉴스 제목이 없습니다.')).replace('<b>', '').replace('</b>', '').replace('&quot;', '"').replace('&amp;', '&')
-        link = str(row.get('link', 'https://news.naver.com'))
-        desc = str(row.get('description', '본문 요약 내용을 불러오는 중입니다.')).replace('<b>', '').replace('</b>', '').replace('&quot;', '"').replace('&amp;', '&')
-        source = str(row.get('press', '네이버뉴스'))
-        return title, link, desc, source
-    return f"최신 HR 트렌드 이슈 #{index+1}", "https://news.naver.com", "자동 수집된 HR 주요 뉴스의 요약문이 여기에 표시됩니다.", "네이버뉴스"
 
-# 3. 트렌디한 CSS 적용
-st.markdown("""
+        # 1) 제목 컬럼 감지
+        title_val = row.get("title", row.get("제목", "뉴스 제목이 없습니다."))
+        title = (
+            str(title_val)
+            .replace("<b>", "")
+            .replace("</b>", "")
+            .replace("&quot;", '"')
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+        )
+
+        # 2) 링크 컬럼 감지
+        link_val = row.get(
+            "link", row.get("originallink", row.get("url", "https://news.naver.com"))
+        )
+        link = str(link_val) if str(link_val).startswith("http") else f"https://{link_val}"
+
+        # 3) 요약 본문 컬럼 유연 감지 (description, summary, content, 요약, 본문 대응)
+        desc_val = None
+        for col_name in ["description", "summary", "content", "요약", "본문", "desc"]:
+            if col_name in row.index and pd.notna(row[col_name]):
+                desc_val = str(row[col_name]).strip()
+                if desc_val:
+                    break
+
+        if not desc_val or desc_val.lower() == "nan":
+            desc = f"'{title}' 기사의 주요 내용입니다. 자세한 내용은 원문을 참고해 주세요."
+        else:
+            desc = (
+                desc_val.replace("<b>", "")
+                .replace("</b>", "")
+                .replace("&quot;", '"')
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+            )
+
+        # 4) 언론사/출처 컬럼 감지
+        source_val = row.get("press", row.get("source", row.get("언론사", "네이버뉴스")))
+        source = str(source_val)
+
+        return title, link, desc, source
+
+    return (
+        f"최신 HR 트렌드 이슈 #{index+1}",
+        "https://news.naver.com",
+        "자동 수집된 HR 주요 뉴스의 요약문이 여기에 표시됩니다.",
+        "네이버뉴스",
+    )
+
+
+# 3. 트렌디한 CSS 적용 (상단 잘림 해결 & 폰트 위계 재설정)
+st.markdown(
+    """
     <style>
+    /* [수정] 상단 여백 조정을 통한 잘림 방지 */
     .block-container {
         padding-top: 3.5rem !important;
         padding-bottom: 2rem !important;
@@ -64,15 +115,35 @@ st.markdown("""
         margin-top: 4px;
     }
 
-    /* 상단 슬림 요약 카드 */
+    /* [수정] 상단 슬림 요약 카드 (상위 위계: 폰트 확충) */
     .top-card {
         background: #ffffff;
         border: 1px solid #e2e8f0;
         border-left: 4px solid #2563eb;
         border-radius: 10px;
-        padding: 14px 16px;
+        padding: 16px 18px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.02);
     }
+    .top-card-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: #0f172a;
+        margin-top: 8px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .top-card-desc {
+        font-size: 13px;
+        color: #475569;
+        margin-top: 6px;
+        line-height: 1.45;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
     .badge-category {
         font-size: 11px;
         font-weight: 700;
@@ -114,7 +185,7 @@ st.markdown("""
         border-bottom: 1px solid #f1f5f9;
     }
 
-    /* 트렌디한 라벨 칩 (No.1-1 대체) */
+    /* 트렌디한 라벨 칩 */
     .chip-label {
         display: inline-block;
         font-size: 11px;
@@ -142,14 +213,21 @@ st.markdown("""
         background: #ffffff;
     }
     
+    /* [수정] 호버 카드 폰트 위계 조정 (서브 위계) */
+    .hover-title {
+        font-size: 13.5px;
+        font-weight: 700;
+        color: #1e293b;
+    }
+
     /* 호버 시 펼쳐지는 요약문 영역 */
     .hover-details {
         max-height: 0;
         opacity: 0;
         transition: all 0.3s ease-in-out;
-        font-size: 13px;
-        color: #334155;
-        line-height: 1.6;
+        font-size: 12.5px;
+        color: #475569;
+        line-height: 1.55;
         overflow: hidden;
     }
     .hover-card:hover .hover-details {
@@ -175,17 +253,22 @@ st.markdown("""
         background-color: #1d4ed8;
     }
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ---------------------------------------------------------
 # [1] 메인 타이틀
 # ---------------------------------------------------------
-st.markdown("""
+st.markdown(
+    """
 <div class="header-container">
     <div class="header-title">⚡ GAME & PLATFORM HR PULSE</div>
     <div class="header-subtitle">게임/플랫폼 업계 인사 담당자를 위한 핵심 이슈 1분 리포트</div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # 뉴스 데이터 추출
 t0, l0, d0, s0 = get_news_item(df, 0)
@@ -201,43 +284,52 @@ t5, l5, d5, s5 = get_news_item(df, 5)
 c1, c2, c3 = st.columns(3)
 
 with c1:
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="top-card">
         <div>
             <span class="badge-category">AI / HR Tech</span>
             <span class="badge-source">{s0}</span>
             <span class="link-tag">KEY 01 🔗</span>
         </div>
-        <div style="font-size:14px; font-weight:700; color:#0f172a; margin-top:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{t0}</div>
-        <div style="font-size:12px; color:#64748b; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{d0}</div>
+        <div class="top-card-title">{t0}</div>
+        <div class="top-card-desc">{d0}</div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 with c2:
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="top-card" style="border-left-color: #7c3aed;">
         <div>
             <span class="badge-category" style="color:#7c3aed; background:#f3e8ff;">노무 / 법률</span>
             <span class="badge-source">{s2}</span>
             <span class="link-tag" style="color:#7c3aed; background:#f3e8ff;">KEY 02 🔗</span>
         </div>
-        <div style="font-size:14px; font-weight:700; color:#0f172a; margin-top:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{t2}</div>
-        <div style="font-size:12px; color:#64748b; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{d2}</div>
+        <div class="top-card-title">{t2}</div>
+        <div class="top-card-desc">{d2}</div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 with c3:
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="top-card" style="border-left-color: #d97706;">
         <div>
             <span class="badge-category" style="color:#d97706; background:#fef3c7;">채용 트렌드</span>
             <span class="badge-source">{s4}</span>
             <span class="link-tag" style="color:#d97706; background:#fef3c7;">KEY 03 🔗</span>
         </div>
-        <div style="font-size:14px; font-weight:700; color:#0f172a; margin-top:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{t4}</div>
-        <div style="font-size:12px; color:#64748b; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{d4}</div>
+        <div class="top-card-title">{t4}</div>
+        <div class="top-card-desc">{d4}</div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 st.write("")
 
@@ -248,11 +340,12 @@ col_left, col_right = st.columns(2)
 
 with col_left:
     # 1. HR 트렌드
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="section-box">
         <div class="section-title">📈 HR 트렌드 & HR Tech</div>
         <div class="hover-card">
-            <div style="font-size:14px; font-weight:700; color:#1e293b;">
+            <div class="hover-title">
                 <span class="chip-label">KEY 01</span> {t0}
             </div>
             <div class="hover-details">
@@ -262,7 +355,7 @@ with col_left:
             </div>
         </div>
         <div class="hover-card" style="margin-bottom:0;">
-            <div style="font-size:14px; font-weight:700; color:#1e293b;">
+            <div class="hover-title">
                 <span class="chip-label">ISSUE 02</span> {t1}
             </div>
             <div class="hover-details">
@@ -271,14 +364,17 @@ with col_left:
             </div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     # 3. 채용 트렌드
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="section-box">
         <div class="section-title">🔍 채용 트렌드 및 이슈</div>
         <div class="hover-card" style="margin-bottom:0;">
-            <div style="font-size:14px; font-weight:700; color:#1e293b;">
+            <div class="hover-title">
                 <span class="chip-label" style="color:#d97706; background:#fef3c7;">KEY 03</span> {t4}
             </div>
             <div class="hover-details">
@@ -288,15 +384,18 @@ with col_left:
             </div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 with col_right:
     # 2. 노무/법률
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="section-box">
         <div class="section-title">⚖️ 노무 · 근로기준법 · 고용부 이슈</div>
         <div class="hover-card">
-            <div style="font-size:14px; font-weight:700; color:#1e293b;">
+            <div class="hover-title">
                 <span class="chip-label" style="color:#7c3aed; background:#f3e8ff;">KEY 02</span> {t2}
             </div>
             <div class="hover-details">
@@ -306,7 +405,7 @@ with col_right:
             </div>
         </div>
         <div class="hover-card" style="margin-bottom:0;">
-            <div style="font-size:14px; font-weight:700; color:#1e293b;">
+            <div class="hover-title">
                 <span class="chip-label" style="color:#7c3aed; background:#f3e8ff;">ISSUE 02</span> {t3}
             </div>
             <div class="hover-details">
@@ -315,14 +414,17 @@ with col_right:
             </div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     # 4. 조직문화
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="section-box">
         <div class="section-title">👥 조직문화 & 근무제도</div>
         <div class="hover-card" style="margin-bottom:0;">
-            <div style="font-size:14px; font-weight:700; color:#1e293b;">
+            <div class="hover-title">
                 <span class="chip-label" style="color:#059669; background:#ecfdf5;">ISSUE 01</span> {t5}
             </div>
             <div class="hover-details">
@@ -331,4 +433,6 @@ with col_right:
             </div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
