@@ -33,12 +33,12 @@ TRUSTED_SOURCES = [
     "hani.co.kr", "khan.co.kr"
 ]
 
-# 넓은 검색어로 바꿈 (OR 조건 사용으로 관련 HR/인사 기사 폭넓게 캐치)
+# ★ [재정의된 카테고리별 타겟 검색어]
 HR_SEARCH_TARGETS = {
-    "노동법/법률이슈": "근로기준법 OR 노동법 OR 최저임금",
-    "HR/인사 트렌드": "인사관리 OR HR 트렌드",
-    "채용 트렌드": "채용 OR 이직",
-    "조직문화/근무제도": "조직문화 OR 근무제도 OR 유연근무",
+    "HR 트렌드 & HR Tech": "HR AI OR HR테크 OR HR기술 OR 인사시스템 OR 디지털인사",
+    "노무 · 근로기준법 · 고용노동부": "근로기준법 OR 고용노동부 OR 임금 OR 최저임금 OR 노동법 OR 노사",
+    "채용 트렌드 및 이슈": "채용 OR 이직 OR 비정규직 OR 실업률 OR 고용동향 OR 인재채용",
+    "조직문화 & 근무제도": "조직문화 OR 근무제도 OR 재택근무 OR 기업문화 OR HRD OR 유연근무",
 }
 
 
@@ -58,22 +58,23 @@ def clean_text(text):
     )
 
 
-def summarize_with_gpt(title, raw_description):
+def summarize_with_gpt(category, title, raw_description):
     if not client or not OPENAI_API_KEY:
         return raw_description
 
     try:
         prompt = f"""
-다음은 최근 HR/노무 뉴스 기사의 제목과 원문 요약입니다.
-이 뉴스를 읽고, 게임/플랫폼 기업의 **HR 인사담당자가 꼭 알아야 할 핵심 메시지 및 영향**을 중심으로 1~2문장(80~120자 내외)의 깔끔한 요약문으로 재작성해 주세요.
+다음은 [{category}] 영역의 HR/노무 뉴스 기사입니다.
+게임/플랫폼 기업의 **HR 인사담당자가 꼭 알아야 할 핵심 메시지 및 실무적 영향**을 중심으로 1~2문장(80~120자 내외)의 요약문으로 작성해 주세요.
 
+- 카테고리: {category}
 - 기사 제목: {title}
 - 원문 개요: {raw_description}
 
 [주의사항]
-1. 단순 제목 반복이나 헤드라인 나열을 금지합니다.
-2. '~함에 따라 대비가 필요함', '~가 확대되는 추세임' 등 인사 실무 관점의 명확한 서술어로 작성해 주세요.
-3. 오직 요약문 결과만 출력하세요.
+1. 제목 단순 반복 금지.
+2. 실무적 관점('~에 따른 대비 필요', '~ 경향 확대' 등)으로 서술.
+3. 결과 텍스트만 출력.
 """
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -116,14 +117,13 @@ def fetch_top_hr_news(limit_total=10):
     
     kst = timezone(timedelta(hours=9))
     now = datetime.now(kst)
-    # ★ 정확히 최근 2일(48시간) 이내 기준 설정
-    cutoff_date = now - timedelta(days=2)
+    cutoff_date = now - timedelta(days=2)  # 최근 2일(48시간) 이내 기준 엄격 유지
 
-    print(f"🔎 네이버 API 최신 HR 뉴스 검색 시작... (2일 이내 기준: {cutoff_date.strftime('%Y-%m-%d %H:%M')} 이후)")
+    print(f"🔎 카테고리별 최신 HR 뉴스 검색 시작... (2일 이내 기준: {cutoff_date.strftime('%Y-%m-%d %H:%M')} 이후)")
+    
     for category, query in HR_SEARCH_TARGETS.items():
         encoded_query = urllib.parse.quote(query)
-        # sort=date (최신순 50개 수집 후 2일 기준 필터링)
-        url = f"https://openapi.naver.com/v1/search/news.json?query={encoded_query}&display=50&sort=date"
+        url = f"https://openapi.naver.com/v1/search/news.json?query={encoded_query}&display=40&sort=date"
         headers = {
             "X-Naver-Client-Id": CLIENT_ID,
             "X-Naver-Client-Secret": CLIENT_SECRET,
@@ -139,7 +139,6 @@ def fetch_top_hr_news(limit_total=10):
                     if pub_dt.tzinfo is None:
                         pub_dt = pub_dt.replace(tzinfo=kst)
                     
-                    # 2일 초과 기사는 엄격하게 제거
                     if pub_dt < cutoff_date:
                         continue
                 except Exception:
@@ -148,6 +147,7 @@ def fetch_top_hr_news(limit_total=10):
                 title = clean_text(item["title"])
                 raw_desc = clean_text(item.get("description", ""))
 
+                # 인사발령, 단순 부음 등 가비지 데이터 제외
                 if any(bad in title for bad in ["인사발령", "부음", "동정", "부고", "승진", "특가"]):
                     continue
 
@@ -182,7 +182,7 @@ def fetch_top_hr_news(limit_total=10):
     print(f"\n🤖 최근 2일 내 수집된 기사 {len(unique_articles)}건 GPT 요약 진행 중...")
     final_articles = []
     for art in unique_articles:
-        gpt_summary = summarize_with_gpt(art["title"], art["raw_desc"])
+        gpt_summary = summarize_with_gpt(art["category"], art["title"], art["raw_desc"])
         final_articles.append({
             "category": art["category"],
             "title": art["title"],
@@ -195,7 +195,7 @@ def fetch_top_hr_news(limit_total=10):
     df = pd.DataFrame(final_articles)
     if not df.empty:
         df.to_csv("hr_news.csv", index=False, encoding="utf-8-sig")
-        print(f"🎉 [성공] 최근 2일 이내의 최신 뉴스 {len(df)}건을 hr_news.csv에 저장했습니다!")
+        print(f"🎉 [성공] 분류된 최신 뉴스 {len(df)}건을 hr_news.csv에 저장했습니다!")
     else:
         print("⚠️ 최근 2일 이내 조건에 맞는 최신 뉴스가 없습니다.")
 
