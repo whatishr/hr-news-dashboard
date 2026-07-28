@@ -14,7 +14,8 @@ CLIENT_ID = os.getenv("CLIENT_ID", "n_sOcFCgRFVkTTGUN9W7")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET", "56vRPwOw1b")
 
 # OpenAI API 키 (환경변수 'OPENAI_API_KEY'에서 가져오거나 직접 입력)
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "여기에_OPENAI_API_KEY를_입력하세요")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "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
+")
 
 # OpenAI 클라이언트 초기화
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
