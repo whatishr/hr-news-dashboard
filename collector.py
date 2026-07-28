@@ -25,29 +25,27 @@ CLIENT_SECRET = (
 )
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-# OpenAI 클라이언트 생성
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-# 주요 언론사 가산점 목록
 TRUSTED_SOURCES = [
     "hankyung.com", "mk.co.kr", "sedaily.com", "chosun.com", "joongang.co.kr",
     "donga.com", "etnews.com", "e27.co.kr", "worklaw.co.kr", "laborplus.co.kr",
     "hani.co.kr", "khan.co.kr"
 ]
 
-# 기존 검색어를 제거하고 아래처럼 현실적인 최신 키워드로 교체해 주세요.
+# 넓은 검색어로 바꿈 (OR 조건 사용으로 관련 HR/인사 기사 폭넓게 캐치)
 HR_SEARCH_TARGETS = {
-    "노동법/법률이슈": "근로기준법 개정 노동법 최저임금",
-    "HR/인사 트렌드": "HR 인사 트렌드 인사관리 리포트",
-    "채용 트렌드": "채용 트렌드 이직 시장 채용문화",
-    "조직문화/근무제도": "조직문화 근무제도 유연근무 주4일제",
+    "노동법/법률이슈": "근로기준법 OR 노동법 OR 최저임금",
+    "HR/인사 트렌드": "인사관리 OR HR 트렌드",
+    "채용 트렌드": "채용 OR 이직",
+    "조직문화/근무제도": "조직문화 OR 근무제도 OR 유연근무",
 }
+
 
 # ==========================================
 # 2. 텍스트 정제 및 유틸리티 함수
 # ==========================================
 def clean_text(text):
-    """HTML 태그 및 특수문자 제거"""
     if not text:
         return ""
     return (
@@ -61,9 +59,7 @@ def clean_text(text):
 
 
 def summarize_with_gpt(title, raw_description):
-    """GPT 기반 인사담당자용 1~2줄 요약문 생성"""
     if not client or not OPENAI_API_KEY:
-        print("⚠️ OpenAI API Key가 없어 원본 description을 사용합니다.")
         return raw_description
 
     try:
@@ -89,13 +85,11 @@ def summarize_with_gpt(title, raw_description):
             max_tokens=200,
         )
         return response.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"⚠️ GPT 요약 실패 ({title[:15]}...): {e}")
+    except Exception:
         return raw_description
 
 
 def calculate_score(item):
-    """언론사 신뢰도 점수 부여"""
     score = 0
     link = item.get("originallink", "") or item.get("link", "")
     if any(domain in link for domain in TRUSTED_SOURCES):
@@ -106,7 +100,6 @@ def calculate_score(item):
 
 
 def is_similar(title1, title2):
-    """기사 제목 유사도 판별 (중복 제거용)"""
     words1 = set(re.findall(r"\w+", title1))
     words2 = set(re.findall(r"\w+", title2))
     if not words1 or not words2:
@@ -121,16 +114,16 @@ def is_similar(title1, title2):
 def fetch_top_hr_news(limit_total=10):
     raw_articles = []
     
-    # KST (한국 시각) 기준 48시간(2일)전 계산
     kst = timezone(timedelta(hours=9))
     now = datetime.now(kst)
-    two_days_ago = now - timedelta(days=2)
+    # ★ 정확히 최근 2일(48시간) 이내 기준 설정
+    cutoff_date = now - timedelta(days=2)
 
-    print("🔎 네이버 API 최신 HR 뉴스 검색 시작...")
+    print(f"🔎 네이버 API 최신 HR 뉴스 검색 시작... (2일 이내 기준: {cutoff_date.strftime('%Y-%m-%d %H:%M')} 이후)")
     for category, query in HR_SEARCH_TARGETS.items():
         encoded_query = urllib.parse.quote(query)
-        # sort=date (최신순)
-        url = f"https://openapi.naver.com/v1/search/news.json?query={encoded_query}&display=30&sort=date"
+        # sort=date (최신순 50개 수집 후 2일 기준 필터링)
+        url = f"https://openapi.naver.com/v1/search/news.json?query={encoded_query}&display=50&sort=date"
         headers = {
             "X-Naver-Client-Id": CLIENT_ID,
             "X-Naver-Client-Secret": CLIENT_SECRET,
@@ -141,21 +134,20 @@ def fetch_top_hr_news(limit_total=10):
             for item in res.json().get("items", []):
                 pub_date_str = item.get("pubDate", "")
                 
-                # ★ [날짜 필터 및 검증]
                 try:
                     pub_dt = parsedate_to_datetime(pub_date_str)
                     if pub_dt.tzinfo is None:
                         pub_dt = pub_dt.replace(tzinfo=kst)
                     
-                    if pub_dt < two_days_ago:
-                        continue  # 2일 초과된 옛날 기사는 필터링
+                    # 2일 초과 기사는 엄격하게 제거
+                    if pub_dt < cutoff_date:
+                        continue
                 except Exception:
-                    continue  # 날짜 파싱 오류 기사는 제외
+                    continue
 
                 title = clean_text(item["title"])
                 raw_desc = clean_text(item.get("description", ""))
 
-                # 불필요한 단순 인사/부고성 기사 제외
                 if any(bad in title for bad in ["인사발령", "부음", "동정", "부고", "승진", "특가"]):
                     continue
 
@@ -166,14 +158,14 @@ def fetch_top_hr_news(limit_total=10):
                     "raw_desc": raw_desc,
                     "link": item.get("originallink") or item["link"],
                     "pubDate": item["pubDate"],
-                    "pub_dt": pub_dt,  # 정렬용 날짜 객체
+                    "pub_dt": pub_dt,
                     "score": score,
                 })
 
-    # ★ [핵심 정렬] 1순위: 발행 시각(최신순), 2순위: 출처 점수(신뢰도)
+    # 최신 날짜순 > 출처 점수순 정렬
     raw_articles.sort(key=lambda x: (x["pub_dt"], x["score"]), reverse=True)
 
-    # 중복 기사 제거
+    # 중복 제거
     unique_articles = []
     for art in raw_articles:
         duplicate = False
@@ -187,7 +179,7 @@ def fetch_top_hr_news(limit_total=10):
         if len(unique_articles) >= limit_total:
             break
 
-    print(f"\n🤖 최근 2일 내 수집된 검증 기사 {len(unique_articles)}건 GPT 요약 진행 중...")
+    print(f"\n🤖 최근 2일 내 수집된 기사 {len(unique_articles)}건 GPT 요약 진행 중...")
     final_articles = []
     for art in unique_articles:
         gpt_summary = summarize_with_gpt(art["title"], art["raw_desc"])
@@ -200,13 +192,12 @@ def fetch_top_hr_news(limit_total=10):
             "collected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         })
 
-    # CSV 파일 저장
     df = pd.DataFrame(final_articles)
     if not df.empty:
         df.to_csv("hr_news.csv", index=False, encoding="utf-8-sig")
         print(f"🎉 [성공] 최근 2일 이내의 최신 뉴스 {len(df)}건을 hr_news.csv에 저장했습니다!")
     else:
-        print("⚠️ 최근 2일 이내 조건에 맞는 신규 뉴스가 없습니다.")
+        print("⚠️ 최근 2일 이내 조건에 맞는 최신 뉴스가 없습니다.")
 
 
 if __name__ == "__main__":
