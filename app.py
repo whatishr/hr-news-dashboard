@@ -1,188 +1,277 @@
 import streamlit as st
 
-# 1. 페이지 기본 설정 (넓은 레이아웃)
+# 1. 페이지 설정
 st.set_page_config(
-    page_title="게임/플랫폼 HR 뉴스 브리핑",
-    page_icon="📰",
+    page_title="HR Pulse - 게임/플랫폼 인사 트렌드",
+    page_icon="⚡",
     layout="wide"
 )
 
-# 2. 여백 축소 및 슬림화 커스텀 CSS
+# 2. 커스텀 CSS (Hover 이펙트 및 대시보드 스타일ing)
 st.markdown("""
     <style>
-    /* 상단/좌우 기본 여백 최소화 (스크롤 방지) */
+    /* 기본 여백 및 배경 */
     .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
-        padding-left: 2rem !important;
-        padding-right: 2rem !important;
+        padding-top: 1.5rem !important;
+        padding-bottom: 1.5rem !important;
+        max-width: 95% !important;
+    }
+    body {
+        background-color: #f8fafc;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     
-    /* 헤더 스타일 및 여백 제거 */
-    .main-title {
-        font-size: 20px;
+    /* 헤더 디자인 */
+    .header-container {
+        margin-bottom: 20px;
+        border-bottom: 2px solid #e2e8f0;
+        padding-bottom: 12px;
+    }
+    .header-title {
+        font-size: 24px;
         font-weight: 800;
         color: #0f172a;
-        margin-bottom: 12px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
+        letter-spacing: -0.5px;
     }
-    
-    /* 슬림 트렌드 카드 스타일 */
-    .summary-card-slender {
-        background-color: #ffffff;
-        padding: 10px 14px;
-        border-radius: 8px;
+    .header-subtitle {
+        font-size: 13px;
+        color: #64748b;
+        margin-top: 2px;
+    }
+
+    /* 상단 슬림 요약 카드 */
+    .top-card {
+        background: #ffffff;
         border: 1px solid #e2e8f0;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-        margin-bottom: 5px;
+        border-left: 4px solid #3b82f6;
+        border-radius: 8px;
+        padding: 12px 14px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        transition: transform 0.2s;
     }
-    
-    /* 태그 및 연계 배지 스타일 */
-    .tag-blue {
-        background-color: #eff6ff;
-        color: #2563eb;
+    .top-card:hover {
+        transform: translateY(-2px);
+    }
+    .badge-category {
         font-size: 11px;
         font-weight: 700;
+        color: #2563eb;
+        background: #eff6ff;
         padding: 2px 6px;
         border-radius: 4px;
-        margin-right: 6px;
     }
-    .link-badge {
-        background-color: #f1f5f9;
-        color: #475569;
-        font-size: 10px;
-        font-weight: 600;
-        padding: 2px 5px;
-        border-radius: 4px;
-        border: 1px solid #cbd5e1;
-        float: right;
-    }
-    .source-text {
-        color: #94a3b8;
+    .badge-source {
         font-size: 11px;
-        margin-left: 4px;
+        color: #94a3b8;
+        margin-left: 6px;
     }
-    
-    /* 구분선 여백 줄이기 */
-    hr {
-        margin: 12px 0 !important;
+    .link-tag {
+        float: right;
+        font-size: 11px;
+        color: #059669;
+        font-weight: 600;
+        background: #ecfdf5;
+        padding: 2px 6px;
+        border-radius: 4px;
     }
-    
-    /* 서브헤더 간격 축소 */
-    .sub-header {
+
+    /* 섹션 타이틀 */
+    .section-title {
         font-size: 15px;
         font-weight: 700;
         color: #1e293b;
-        margin-bottom: 6px;
+        margin-top: 10px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    /* 마우스 Hover 자동 열림 카드 CSS */
+    .hover-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 8px;
+        transition: all 0.25s ease-in-out;
+        cursor: pointer;
+        overflow: hidden;
+    }
+    .hover-card:hover {
+        border-color: #3b82f6;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);
+        background: #ffffff;
+    }
+    
+    /* 호버 시 펼쳐지는 아코디언 내용 */
+    .hover-details {
+        max-height: 0;
+        opacity: 0;
+        transition: all 0.3s ease-in-out;
+        font-size: 12.5px;
+        color: #475569;
+        line-height: 1.5;
+    }
+    .hover-card:hover .hover-details {
+        max-height: 150px;
+        opacity: 1;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px dashed #e2e8f0;
+    }
+
+    /* 원문 보기 버튼 스타일 */
+    .btn-link {
+        display: inline-block;
+        margin-top: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #2563eb;
+        text-decoration: none;
+    }
+    .btn-link:hover {
+        text-decoration: underline;
     }
     </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# [상단] 타이틀 (최상단 밀착)
+# [1] 메인 타이틀 헤더
 # ---------------------------------------------------------
-st.markdown('<div class="main-title">🎮 게임/플랫폼 업계 HR 헤드라인 브리핑</div>', unsafe_allow_html=True)
+st.markdown("""
+<div class="header-container">
+    <div class="header-title">⚡ GAME & PLATFORM HR PULSE</div>
+    <div class="header-subtitle">게임/플랫폼 업계 인사 담당자를 위한 핵심 이슈 1분 리포트</div>
+</div>
+""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# [섹션 1] 오늘의 핵심 트렌드 (슬림형 3개 카드 - 하단 기사와 연계 표기)
+# [2] 상단 핵심 브리핑 (3열 카드)
 # ---------------------------------------------------------
-col1, col2, col3 = st.columns(3)
+c1, c2, c3 = st.columns(3)
 
-with col1:
+with c1:
     st.markdown("""
-    <div class="summary-card-slender">
+    <div class="top-card">
         <div>
-            <span class="tag-blue">AI/인사</span><span class="source-text">전자신문</span>
-            <span class="link-badge">🔗 하단 №1-1 연계</span>
+            <span class="badge-category">AI/인사</span>
+            <span class="badge-source">전자신문</span>
+            <span class="link-tag">🔗 №1-1 연계</span>
         </div>
-        <div style="font-size: 13.5px; font-weight: 700; color:#0f172a; margin-top: 4px;">AI 채용 솔루션 도입 확산</div>
-        <div style="font-size: 12px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-            게임사 서류 검토 시간 50% 단축 성공
-        </div>
+        <div style="font-size:14px; font-weight:700; color:#0f172a; margin-top:6px;">AI 채용 솔루션 도입 확산</div>
+        <div style="font-size:12px; color:#64748b; margin-top:2px;">게임사 서류 검토 시간 50% 단축 성공</div>
     </div>
     """, unsafe_allow_html=True)
 
-with col2:
+with c2:
     st.markdown("""
-    <div class="summary-card-slender">
+    <div class="top-card" style="border-left-color: #8b5cf6;">
         <div>
-            <span class="tag-blue">노무/법률</span><span class="source-text">노동법률</span>
-            <span class="link-badge">🔗 하단 №2-1 연계</span>
+            <span class="badge-category" style="color:#7c3aed; background:#f3e8ff;">노무/법률</span>
+            <span class="badge-source">노동법률</span>
+            <span class="link-tag">🔗 №2-1 연계</span>
         </div>
-        <div style="font-size: 13.5px; font-weight: 700; color:#0f172a; margin-top: 4px;">2026 최저임금·주52시간 개편</div>
-        <div style="font-size: 12px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-            유연근무제 정착 및 노무 리스크 점검
-        </div>
+        <div style="font-size:14px; font-weight:700; color:#0f172a; margin-top:6px;">2026 최저임금·주52시간 개편</div>
+        <div style="font-size:12px; color:#64748b; margin-top:2px;">유연근무제 정착 및 노무 리스크 점검</div>
     </div>
     """, unsafe_allow_html=True)
 
-with col3:
+with c3:
     st.markdown("""
-    <div class="summary-card-slender">
+    <div class="top-card" style="border-left-color: #f59e0b;">
         <div>
-            <span class="tag-blue">채용</span><span class="source-text">매일경제</span>
-            <span class="link-badge">🔗 하단 №3-1 연계</span>
+            <span class="badge-category" style="color:#d97706; background:#fef3c7;">채용</span>
+            <span class="badge-source">매일경제</span>
+            <span class="link-tag">🔗 №3-1 연계</span>
         </div>
-        <div style="font-size: 13.5px; font-weight: 700; color:#0f172a; margin-top: 4px;">경력직 수시 채용 대세 전환</div>
-        <div style="font-size: 12px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-            즉시 투입 가능한 핀포인트 채용 강화
-        </div>
+        <div style="font-size:14px; font-weight:700; color:#0f172a; margin-top:6px;">경력직 수시 채용 대세 전환</div>
+        <div style="font-size:12px; color:#64748b; margin-top:2px;">즉시 투입 가능한 핀포인트 채용 강화</div>
     </div>
     """, unsafe_allow_html=True)
 
-st.divider()
+st.write("")
 
 # ---------------------------------------------------------
-# [섹션 2] 카테고리별 세부 뉴스 (4분할 / 모두 접힘 상태)
+# [3] 하단 4분할 호버 카드 (마우스 대면 자동으로 펼쳐짐)
 # ---------------------------------------------------------
-grid_col1, grid_col2 = st.columns(2)
+col_left, col_right = st.columns(2)
 
-with grid_col1:
+with col_left:
     # 1. HR 트렌드
-    st.markdown('<div class="sub-header">📈 HR 트렌드 (AI & HR Tech)</div>', unsafe_allow_html=True)
-    with st.expander("📌 [№1-1] AI 면접관 도입 현황과 취준생의 반응", expanded=False):
-        st.caption("💡 상단 [AI 채용 솔루션]의 상세 원문 기사입니다.")
-        st.write("AI 기술을 활용한 1차 면접 검증이 대기업 및 게임사를 중심으로 급증하고 있습니다.")
-        st.caption("출처: 전자신문 | 2026.07.28")
-        st.link_button("기사 원문 읽기 🔗", "https://news.naver.com")
-
-    with st.expander("📌 [№1-2] 데이터 기반 성과 평가(HR Analytics) 사례", expanded=False):
-        st.write("주관적 평가를 줄이고 프로젝트 기여도를 데이터로 산출하는 시스템 구축이 트렌드입니다.")
-        st.caption("출처: 한경비즈니스 | 2026.07.27")
-        st.link_button("기사 원문 읽기 🔗", "https://news.naver.com")
-
-    st.write("") # 간격 조정
+    st.markdown('<div class="section-title">📈 HR 트렌드 & HR Tech</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="hover-card">
+        <div style="font-size:13.5px; font-weight:700; color:#1e293b;">
+            <span style="color:#3b82f6;">№1-1</span> AI 면접관 도입 현황과 취준생의 반응
+        </div>
+        <div class="hover-details">
+            💡 <b>상단 [AI 채용 솔루션] 상세 연계 기사</b><br>
+            AI 기술을 활용한 1차 면접 검증이 대기업 및 주요 게임사를 중심으로 급증하고 있습니다. 서류 평가의 신속성은 향상되었으나 공정성 논란도 병존합니다.<br>
+            <a href="https://news.naver.com" target="_blank" class="btn-link">기사 원문 읽기 ➔</a>
+        </div>
+    </div>
+    <div class="hover-card">
+        <div style="font-size:13.5px; font-weight:700; color:#1e293b;">
+            <span style="color:#3b82f6;">№1-2</span> 데이터 기반 성과 평가(HR Analytics) 사례
+        </div>
+        <div class="hover-details">
+            주관적 평가 요소를 줄이고 정량적 데이터 기반으로 기여도를 산출하는 HR 시스템 도입 사례를 다룹니다.<br>
+            <a href="https://news.naver.com" target="_blank" class="btn-link">기사 원문 읽기 ➔</a>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     # 3. 채용 트렌드
-    st.markdown('<div class="sub-header">🔍 채용 트렌드 및 이슈</div>', unsafe_allow_html=True)
-    with st.expander("📌 [№3-1] 경력직 수시 채용 대세... 공채 축소 흐름", expanded=False):
-        st.caption("💡 상단 [경력직 수시 채용]의 상세 원문 기사입니다.")
-        st.write("직무 즉시 투입이 가능한 중고 신입 및 경력직 위주의 핀포인트 채용이 강화되었습니다.")
-        st.caption("출처: 매일경제 | 2026.07.28")
-        st.link_button("기사 원문 읽기 🔗", "https://news.naver.com")
+    st.markdown('<div class="section-title" style="margin-top:16px;">🔍 채용 트렌드 및 이슈</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="hover-card">
+        <div style="font-size:13.5px; font-weight:700; color:#1e293b;">
+            <span style="color:#f59e0b;">№3-1</span> 경력직 수시 채용 대세... 공채 축소 흐름
+        </div>
+        <div class="hover-details">
+            💡 <b>상단 [경력직 수시 채용] 상세 연계 기사</b><br>
+            정기 공채 비율이 크게 감소하고 프로젝트 단위 수시 채용 및 경력직 중심 핀포인트 채용이 주요 채용 트렌드로 자리 잡았습니다.<br>
+            <a href="https://news.naver.com" target="_blank" class="btn-link">기사 원문 읽기 ➔</a>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-
-with grid_col2:
+with col_right:
     # 2. 노무/법률
-    st.markdown('<div class="sub-header">⚖️ 노무·근로기준법·고용부 이슈</div>', unsafe_allow_html=True)
-    with st.expander("📌 [№2-1] 2026년 최저임금 및 주 52시간제 개정안 정리", expanded=False):
-        st.caption("💡 상단 [2026 최저임금·주52시간]의 상세 원문 기사입니다.")
-        st.write("유연근무제 정착을 위한 법적 테두리 개정과 노무 리스크 관리 방안 검토가 필요합니다.")
-        st.caption("출처: 노동법률 | 2026.07.28")
-        st.link_button("기사 원문 읽기 🔗", "https://news.naver.com")
-
-    with st.expander("📌 [№2-2] 노사 관계 및 노동조합 동향 점검", expanded=False):
-        st.write("IT/게임업계 내 노조 설립 및 교섭 이슈 관련 주요 체크포인트 요약.")
-        st.caption("출처: 연합뉴스 | 2026.07.26")
-        st.link_button("기사 원문 읽기 🔗", "https://news.naver.com")
-
-    st.write("") # 간격 조정
+    st.markdown('<div class="section-title">⚖️ 노무 · 근로기준법 · 고용부 이슈</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="hover-card">
+        <div style="font-size:13.5px; font-weight:700; color:#1e293b;">
+            <span style="color:#8b5cf6;">№2-1</span> 2026년 최저임금 및 주 52시간제 개정안 정리
+        </div>
+        <div class="hover-details">
+            💡 <b>상단 [2026 최저임금·주52시간] 상세 연계 기사</b><br>
+            유연근무제 확대 정착에 따른 법적 이슈와 IT/게임업계 맞춤형 노무 리스크 관리 체크포인트를 제시합니다.<br>
+            <a href="https://news.naver.com" target="_blank" class="btn-link">기사 원문 읽기 ➔</a>
+        </div>
+    </div>
+    <div class="hover-card">
+        <div style="font-size:13.5px; font-weight:700; color:#1e293b;">
+            <span style="color:#8b5cf6;">№2-2</span> 노사 관계 및 노동조합 동향 점검
+        </div>
+        <div class="hover-details">
+            플랫폼 및 게임업계 내부 노동조합 설립 및 교섭 동향에 대해 분석합니다.<br>
+            <a href="https://news.naver.com" target="_blank" class="btn-link">기사 원문 읽기 ➔</a>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     # 4. 조직문화
-    st.markdown('<div class="sub-header">👥 조직문화 & 근무제도</div>', unsafe_allow_html=True)
-    with st.expander("📌 [№4-1] 원격/하이브리드 근무 재조정 움직임", expanded=False):
-        st.write("사무실 출근(RTO) 강화 기조와 유연성 유지 사이에서 기업들의 제3의 모범사례 탐색 중.")
-        st.caption("출처: IT조선 | 2026.07.28")
-        st.link_button("기사 원문 읽기 🔗", "https://news.naver.com")
+    st.markdown('<div class="section-title" style="margin-top:16px;">👥 조직문화 & 근무제도</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="hover-card">
+        <div style="font-size:13.5px; font-weight:700; color:#1e293b;">
+            <span style="color:#10b981;">№4-1</span> 원격/하이브리드 근무 재조정 움직임
+        </div>
+        <div class="hover-details">
+            사무실 재출근(RTO) 기조와 완전 원격 근무 사이에서 기업들이 채택하고 있는 하이브리드 근무 형태를 다룹니다.<br>
+            <a href="https://news.naver.com" target="_blank" class="btn-link">기사 원문 읽기 ➔</a>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
