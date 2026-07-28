@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 모든 히스토리를 불러옵니다.
 
       - name: Python 환경 설정
         uses: actions/setup-python@v5
@@ -37,7 +39,11 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 1. 커밋하기 전에 최신 main 브랜치 상태로 맞춤
+          git fetch origin main
+          git reset --soft origin/main
+          
+          # 2. 파일 추가 및 커밋/푸시
           git add hr_news.csv
-          # [핵심] 푸시하기 전에 원격의 최신 내역을 먼저 가져와 합칩니다.
-          git pull --rebase origin main || true
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: hr_news.csv via GitHub Actions" && git push origin main)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto: 매일 HR 뉴스 갱신 [skip ci]" && git push origin main)
