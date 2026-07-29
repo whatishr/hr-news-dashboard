@@ -168,11 +168,12 @@ if df.empty:
 else:
     col_left, col_right = st.columns(2)
 
+    # 💡 카테고리 타이틀을 '노동'으로 수정하고 검색 키워드 연결
     categories_config = [
-        {"title": "📈 HR 트렌드 & HR Tech", "key": "HR 트렌드", "col": col_left, "tag_color": "#2563eb", "tag_bg": "#eff6ff"},
-        {"title": "⚖️ 노무 · 근로기준법 · 고용부 이슈", "key": "노무", "col": col_right, "tag_color": "#7c3aed", "tag_bg": "#f3e8ff"},
-        {"title": "🔍 채용 트렌드 및 이슈", "key": "채용", "col": col_left, "tag_color": "#d97706", "tag_bg": "#fef3c7"},
-        {"title": "👥 조직문화 & 근무제도", "key": "조직문화", "col": col_right, "tag_color": "#059669", "tag_bg": "#ecfdf5"},
+        {"title": "📈 HR 트렌드 & HR Tech", "key": "HR 트렌드", "col": col_left},
+        {"title": "⚖️ 노무 · 근로기준법 · 노동 이슈", "key": "노무", "col": col_right},
+        {"title": "🔍 채용 트렌드 및 이슈", "key": "채용", "col": col_left},
+        {"title": "👥 조직문화 & 근무제도", "key": "조직문화", "col": col_right},
     ]
 
     for config in categories_config:
@@ -203,6 +204,7 @@ else:
                     </div>
                     """
 
+            # 💡 unsafe_allow_html=True 옵션 추가하여 카드 HTML 정상 출력
             st.markdown(
                 f"""
             <div class="section-box">
