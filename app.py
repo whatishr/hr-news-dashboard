@@ -1,14 +1,16 @@
 import os
 import re
+import json
 import pandas as pd
 import streamlit as st
 
 st.set_page_config(
-    page_title="게임/플랫폼업계 뉴스",
+    page_title="HR 인텔리전스 콘솔",
     page_icon="⚡",
     layout="wide",
 )
 
+# 💡 목표 이미지의 리포트 스타일 CSS 적용
 st.markdown("""
 <style>
 .block-container {
@@ -22,121 +24,95 @@ st.markdown("""
     margin-bottom: 20px;
 }
 
-/* 상단 오늘의 스마일게이트 영역 */
-.smile-banner {
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    border: 1px solid #334155;
-    border-radius: 12px;
-    padding: 20px 24px;
-    margin-bottom: 28px;
-}
-.smile-title {
-    font-size: 18px;
-    font-weight: 700;
-    color: #f8fafc;
-    margin-bottom: 16px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #334155;
-}
-
-/* 카테고리 헤더 */
 .sec-title {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 700;
     color: #0f172a;
-    margin-bottom: 14px;
-    padding-bottom: 8px;
-    border-bottom: 2px solid #cbd5e1;
+    margin-top: 15px;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #334155;
 }
 
-/* 뉴스 카드 - 높이 가변 설정으로 제목 잘림 방지 */
-.news-hover-card {
-    background: #ffffff;
+/* 목표 리포트 카드 디자인 */
+.report-card {
+    background-color: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 10px;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    height: auto !important; /* 높이 고정 해제 */
-}
-.news-hover-card:hover {
-    border-color: #2563eb;
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.12);
+    padding: 18px 20px;
+    margin-bottom: 16px;
 }
 
-/* 제목 레이아웃 설정 */
-.news-title-line {
+/* 박범 섹션 타이틀 */
+.section-label {
     font-size: 14px;
-    color: #1e293b;
-    font-weight: 600;
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    white-space: normal !important; /* 줄바꿈 무조건 허용 */
-    word-break: keep-all;            /* 가독성을 위한 한국어 단어 단위 줄바꿈 */
-    line-height: 1.5;
-}
-
-.date-tag {
-    color: #2563eb;
     font-weight: 700;
-    flex-shrink: 0; /* 날짜 태그 줄어듦 방지 */
+    margin-top: 12px;
+    margin-bottom: 6px;
 }
+.blue-label { color: #0284c7; }
+.yellow-label { color: #d97706; }
 
-/* 호버 시 펼쳐지는 요약문 스타일 */
-.news-hover-desc {
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    transition: all 0.3s ease-in-out;
-    font-size: 13px;
-    color: #475569;
+/* 핵심 요약 박스 */
+.summary-box {
+    background-color: #f8fafc;
+    border-left: 4px solid #0284c7;
+    padding: 12px 16px;
+    font-size: 13.5px;
+    color: #334155;
     line-height: 1.6;
-}
-.news-hover-card:hover .news-hover-desc {
-    max-height: 250px;
-    opacity: 1;
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px dashed #cbd5e1;
+    margin-bottom: 14px;
+    border-radius: 0 6px 6px 0;
 }
 
-/* 기사 본문 보기 버튼 */
-.btn-read-more {
-    display: inline-block;
-    margin-top: 8px;
-    padding: 4px 12px;
-    background-color: #2563eb;
-    color: #ffffff !important;
+/* 실무 임팩트 박스 */
+.impact-box {
+    background-color: #fffbeb;
+    border-left: 4px solid #f59e0b;
+    padding: 12px 16px;
+    font-size: 13.5px;
+    color: #451a03;
+    line-height: 1.6;
+    margin-bottom: 14px;
+    border-radius: 0 6px 6px 0;
+}
+
+/* 체크포인트 리스트 */
+.chk-list {
+    font-size: 13.5px;
+    color: #334155;
+    line-height: 1.7;
+    padding-left: 20px;
+    margin-bottom: 14px;
+}
+
+/* 출처 / 링크 버튼 */
+.source-link {
     font-size: 12px;
-    font-weight: 600;
-    border-radius: 4px;
+    color: #64748b;
     text-decoration: none;
 }
-.btn-read-more:hover {
-    background-color: #1d4ed8;
+.source-link a {
+    color: #2563eb;
+    font-weight: 600;
+    text-decoration: none;
+}
+.source-link a:hover {
+    text-decoration: underline;
 }
 
-/* 스마일게이트 전용 카드 호버 스타일 */
-.smile-card {
-    background: #1e293b !important;
-    border: 1px solid #334155 !important;
+/* 오늘의 스마일게이트 전용 */
+.smile-banner {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
 }
-.smile-card:hover {
-    border-color: #38bdf8 !important;
-}
-.smile-card .news-title-line {
-    color: #f8fafc !important;
-}
-.smile-card .date-tag {
-    color: #38bdf8 !important;
-}
-.smile-card .news-hover-desc {
-    color: #cbd5e1 !important;
-    border-top-color: #334155 !important;
-}
-.smile-card .btn-read-more {
-    background-color: #0284c7 !important;
+.smile-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 12px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -154,69 +130,68 @@ def load_data():
 
 df = load_data()
 
-st.markdown('<div class="main-header">⚡ 게임/플랫폼업계 뉴스</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">⚡ HR 인텔리전스 리포트</div>', unsafe_allow_html=True)
 
 if df.empty:
     st.warning("⚠️ hr_news.csv 데이터가 존재하지 않습니다. python collector.py를 먼저 실행해 주세요.")
 else:
-    # A. 오늘의 스마일게이트
+    # A. 오늘의 스마일게이트 (상단)
     smile_df = df[df["category"] == "오늘의 스마일게이트"]
-    
-    smile_items_html = ""
-    if smile_df.empty:
-        smile_items_html = "<div style='font-size:13px; color:#94a3b8;'>최근 수집된 기사가 없습니다.</div>"
-    else:
+    if not smile_df.empty:
+        st.markdown('<div class="smile-banner"><div class="smile-title">🚀 오늘의 스마일게이트</div></div>', unsafe_allow_html=True)
         for _, row in smile_df.head(5).iterrows():
-            date_str = row.get("date_str", "")
-            t = row.get("title", "")
-            d = row.get("description", "")
-            l = row.get("link", "#")
-            
-            smile_items_html += f'<div class="news-hover-card smile-card"><div class="news-title-line"><span class="date-tag">{date_str}</span><span>{t}</span></div><div class="news-hover-desc">{d}<br><a href="{l}" target="_blank" class="btn-read-more">기사 본문 보기 ➔</a></div></div>'
+            with st.expander(f"{row['date_str']} {row['title']}"):
+                st.write(row.get("summary", ""))
+                st.markdown(f"🔗 [원문 기사 보기]({row['link']})")
 
-    smile_full_html = f'<div class="smile-banner"><div class="smile-title">🚀 오늘의 스마일게이트</div>{smile_items_html}</div>'
-    st.markdown(smile_full_html, unsafe_allow_html=True)
-
-    # B. 하단 카테고리 렌더링
-    def render_section(cat_title):
+    # B. 메인 리포트 세션 (Expander 클릭 시 3단계 리포트 노출)
+    def render_report_section(cat_title):
         sub_df = df[df["category"] == cat_title]
-        st.markdown(f'<div class="sec-title">{cat_title}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="sec-title">⚖️ {cat_title} <span style="font-size:13px; font-weight:normal; color:#64748b;">({len(sub_df)}건)</span></div>', unsafe_allow_html=True)
         
         if sub_df.empty:
             st.write("수집된 기사가 없습니다.")
             return
 
-        main_df = sub_df.head(4)
-        more_df = sub_df.iloc[4:]
+        for _, row in sub_df.iterrows():
+            title_label = f"{row['date_str']} [국내] {row['title']}"
+            
+            with st.expander(title_label):
+                summary_text = row.get("summary", "")
+                impact_text = row.get("impact", "")
+                
+                try:
+                    checkpoints = json.loads(row.get("checkpoints", "[]"))
+                except:
+                    checkpoints = []
 
-        for _, row in main_df.iterrows():
-            date_str = row.get("date_str", "")
-            t = row.get("title", "")
-            d = row.get("description", "")
-            l = row.get("link", "#")
+                chk_html = "".join([f"<li>{chk}</li>" for chk in checkpoints])
 
-            card_html = f'<div class="news-hover-card"><div class="news-title-line"><span class="date-tag">{date_str}</span><span>{t}</span></div><div class="news-hover-desc">{d}<br><a href="{l}" target="_blank" class="btn-read-more">기사 본문 보기 ➔</a></div></div>'
-            st.markdown(card_html, unsafe_allow_html=True)
-
-        if not more_df.empty:
-            with st.expander("▼ 이전 기사 더보기"):
-                for _, row in more_df.iterrows():
-                    date_str = row.get("date_str", "")
-                    t = row.get("title", "")
-                    d = row.get("description", "")
-                    l = row.get("link", "#")
-
-                    card_html = f'<div class="news-hover-card"><div class="news-title-line"><span class="date-tag">{date_str}</span><span>{t}</span></div><div class="news-hover-desc">{d}<br><a href="{l}" target="_blank" class="btn-read-more">기사 본문 보기 ➔</a></div></div>'
-                    st.markdown(card_html, unsafe_allow_html=True)
+                # 💡 목표 이미지의 리포트 구조 렌더링
+                card_html = f'''
+                <div class="report-card">
+                    <div class="section-label blue-label">핵심 요약</div>
+                    <div class="summary-box">{summary_text}</div>
+                    
+                    <div class="section-label yellow-label">실무 임팩트</div>
+                    <div class="impact-box">{impact_text}</div>
+                    
+                    <div class="section-label blue-label">실무 체크포인트</div>
+                    <ul class="chk-list">{chk_html}</ul>
+                    
+                    <div class="source-link">🔗 원문 링크: <a href="{row['link']}" target="_blank">원문 보기</a></div>
+                </div>
+                '''
+                st.markdown(card_html, unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
 
     with col1:
-        render_section("HR 트렌드 섹션 (ai등HR/인사 트렌드)")
+        render_report_section("HR 트렌드 섹션 (ai등HR/인사 트렌드)")
         st.write("")
-        render_section("노사/ 노동 / 노조/보상/평가/성과급")
+        render_report_section("노사/ 노동 / 노조/보상/평가/성과급")
 
     with col2:
-        render_section("고용노동부/노동법/판례")
+        render_report_section("고용노동부/노동법/판례")
         st.write("")
-        render_section("채용/조직문화")
+        render_report_section("채용/조직문화")
