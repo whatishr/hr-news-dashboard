@@ -3,16 +3,13 @@ import re
 import pandas as pd
 import streamlit as st
 
-# ==========================================
-# 1. 페이지 기본 설정
-# ==========================================
 st.set_page_config(
     page_title="게임/플랫폼업계 뉴스",
     page_icon="⚡",
     layout="wide",
 )
 
-# Custom CSS
+# 💡 CSS 수정: 제목 잘림 방지 (white-space: normal 적용)
 st.markdown("""
 <style>
 .block-container {
@@ -26,7 +23,6 @@ st.markdown("""
     margin-bottom: 20px;
 }
 
-/* 오늘의 스마일게이트 배너 */
 .smile-banner {
     background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
     border: 1px solid #334155;
@@ -43,7 +39,6 @@ st.markdown("""
     border-bottom: 1px solid #334155;
 }
 
-/* 카테고리 타이틀 */
 .sec-title {
     font-size: 16px;
     font-weight: 700;
@@ -53,7 +48,6 @@ st.markdown("""
     border-bottom: 2px solid #cbd5e1;
 }
 
-/* 뉴스 카드 */
 .news-hover-card {
     background: #ffffff;
     border: 1px solid #e2e8f0;
@@ -66,18 +60,23 @@ st.markdown("""
     border-color: #2563eb;
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
 }
+
+/* 💡 제목이 잘리지 않고 끝까지 표시되도록 설정 */
 .news-title-line {
     font-size: 14px;
     color: #1e293b;
     font-weight: 600;
+    white-space: normal !important; /* 줄바꿈 허용으로 잘림 방지 */
+    word-break: keep-all;            /* 단어 단위 자연스러운 줄바꿈 */
+    line-height: 1.5;
 }
 .date-tag {
     color: #2563eb;
     font-weight: 700;
     margin-right: 6px;
+    display: inline-block;
 }
 
-/* 호버 시 펼쳐지는 내용 */
 .news-hover-desc {
     max-height: 0;
     opacity: 0;
@@ -88,14 +87,13 @@ st.markdown("""
     line-height: 1.5;
 }
 .news-hover-card:hover .news-hover-desc {
-    max-height: 150px;
+    max-height: 200px;
     opacity: 1;
     margin-top: 10px;
     padding-top: 10px;
     border-top: 1px dashed #e2e8f0;
 }
 
-/* 버튼 */
 .btn-read-more {
     display: inline-block;
     margin-top: 8px;
@@ -111,7 +109,6 @@ st.markdown("""
     background-color: #1d4ed8;
 }
 
-/* 스마일게이트 전용 카드 */
 .smile-card {
     background: #1e293b !important;
     border: 1px solid #334155 !important;
@@ -135,15 +132,11 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# 2. 데이터 로드 및 날짜 포맷팅
-# ==========================================
 @st.cache_data(ttl=30)
 def load_data():
     if os.path.exists("hr_news.csv"):
         try:
             df = pd.read_csv("hr_news.csv").fillna("")
-            # 기존에 [YYYY-MM-DD] 형태로 저장된 데이터가 있더라도 [MM/DD]로 강제 변환
             if "date_str" in df.columns:
                 df["date_str"] = df["date_str"].apply(lambda x: re.sub(r'\[\d{4}-(\d{2}-\d{2})\]', r'[\1]', str(x)).replace('-', '/'))
             return df
@@ -152,9 +145,6 @@ def load_data():
 
 df = load_data()
 
-# ==========================================
-# 3. 화면 구현
-# ==========================================
 st.markdown('<div class="main-header">⚡ 게임/플랫폼업계 뉴스</div>', unsafe_allow_html=True)
 
 if df.empty:
@@ -163,7 +153,6 @@ else:
     # A. 오늘의 스마일게이트
     smile_df = df[df["category"] == "오늘의 스마일게이트"]
     
-    # HTML 내부 들여쓰기 공백 완벽 제거 (한 줄 작성)
     smile_items_html = ""
     if smile_df.empty:
         smile_items_html = "<div style='font-size:13px; color:#94a3b8;'>최근 수집된 기사가 없습니다.</div>"
@@ -174,7 +163,6 @@ else:
             d = row.get("description", "")
             l = row.get("link", "#")
             
-            # 태그 사이 줄바꿈을 포함하지 않고 구성하여 Streamlit 코드 블록 감지 방지
             smile_items_html += f'<div class="news-hover-card smile-card"><div class="news-title-line"><span class="date-tag">{date_str}</span> {t}</div><div class="news-hover-desc">{d}<br><a href="{l}" target="_blank" class="btn-read-more">기사 본문 보기 ➔</a></div></div>'
 
     smile_full_html = f'<div class="smile-banner"><div class="smile-title">🚀 오늘의 스마일게이트</div>{smile_items_html}</div>'

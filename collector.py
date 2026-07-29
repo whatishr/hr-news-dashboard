@@ -6,6 +6,7 @@ from email.utils import parsedate_to_datetime
 import pandas as pd
 import requests
 import urllib3
+from bs4 import BeautifulSoup
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -19,28 +20,51 @@ TRUSTED_SOURCES = [
 ]
 
 CATEGORY_KEYWORDS = {
-    "오늘의 스마일게이트": [
-        "스마일게이트"
-    ],
-    "HR 트렌드 섹션 (ai등HR/인사 트렌드)": [
-        "HR 테크 AI 인사", "인사 트렌드 2026", "HR Analytics 피플"
-    ],
-    "고용노동부/노동법/판례": [
-        "고용노동부 근로감독", "근로기준법 대법원 판결", "중대재해처벌법 판례"
-    ],
-    "노사/ 노동 / 노조/보상/평가/성과급": [
-        "기업 노사 파업 노조", "인사평가 성과급 보상", "연봉 인상 임단협"
-    ],
-    "채용/조직문화": [
-        "채용 트렌드 경력직", "기업 조직문화 근무제도", "하이브리드 워크 복지"
-    ]
+    "오늘의 스마일게이트": ["스마일게이트"],
+    "HR 트렌드 섹션 (ai등HR/인사 트렌드)": ["HR 테크 AI 인사", "인사 트렌드 2026", "HR Analytics 피플"],
+    "고용노동부/노동법/판례": ["고용노동부 근로감독", "근로기준법 대법원 판결", "중대재해처벌법 판례"],
+    "노사/ 노동 / 노조/보상/평가/성과급": ["기업 노사 파업 노조", "인사평가 성과급 보상", "연봉 인상 임단협"],
+    "채용/조직문화": ["채용 트렌드 경력직", "기업 조직문화 근무제도", "하이브리드 워크 복지"]
 }
 
 CSV_FILE_PATH = "hr_news.csv"
 
-def clean_text(text):
-    if not text: return ""
-    return re.sub("<.*?>", "", text).replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").strip()
+# 💡 제목 정제 함수 (말줄임표 제거 및 핵심 제목 추출)
+def clean_title(title):
+    if not title: return ""
+    text = re.sub("<.*?>", "", title).replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").strip()
+    # [단독], [포토], [인사] 등의 라벨 제거
+    text = re.sub(r"\[(단독|포토|기획|속보|인사|부음)\]", "", text).strip()
+    # 네이버가 붙인 말줄임표(...) 제거
+    text = re.sub(r"\.\.\.$", "", text).strip()
+    text = re.sub(r"\.\.\.$", "", text).strip()
+    return text
+
+# 💡 무료 본문 요약 함수 (API 없이 HTML 크롤링으로 핵심 1~2문장 추출)
+def fetch_free_summary(link, raw_desc):
+    try:
+        # 간단한 웹 요청으로 본문 첫 문장 추출 시도
+        res = requests.get(link, timeout=3, headers={"User-Agent": "Mozilla/5.0"})
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, "html.parser")
+            # 본문 P 태그 검색
+            paragraphs = soup.find_all("p")
+            valid_texts = []
+            for p in paragraphs:
+                t = p.get_text().strip()
+                if len(t) > 30 and not any(x in t for x in ["기자", "저작권", "무단전재", "구독"]):
+                    valid_texts.append(t)
+                if len(valid_texts) >= 2:
+                    break
+            if valid_texts:
+                summary = " ".join(valid_texts)
+                return summary[:180] + "..." if len(summary) > 180 else summary
+    except:
+        pass
+    
+    # 크롤링 실패 시 API 제공 description 정제 사용 (무료)
+    clean_desc = re.sub("<.*?>", "", raw_desc).replace("&quot;", '"').replace("&amp;", "&").strip()
+    return clean_desc
 
 def is_trusted_source(link):
     return any(domain in link for domain in TRUSTED_SOURCES) if link else False
@@ -62,7 +86,7 @@ def run_collection():
     headers = {"X-Naver-Client-Id": CLIENT_ID, "X-Naver-Client-Secret": CLIENT_SECRET}
     final_articles = []
 
-    print("📡 맞춤 뉴스 수집 시작...")
+    print("📡 무료 핵심 뉴스 수집 및 요약 시작...")
 
     for category_name, keywords in CATEGORY_KEYWORDS.items():
         cat_articles = []
@@ -82,21 +106,23 @@ def run_collection():
                     link = item.get("originallink") or item.get("link", "")
                     if category_name != "오늘의 스마일게이트" and not is_trusted_source(link): continue
 
-                    title = clean_text(item["title"])
-                    raw_desc = clean_text(item.get("description", ""))
+                    title = clean_title(item["title"])
+                    raw_desc = item.get("description", "")
                     
                     if is_noise_article(title, raw_desc): continue
                     if title in seen_titles: continue
                     seen_titles.add(title)
 
-                    # 💡 [MM/DD] 포맷 지정 (예: [07/29])
                     date_str = pub_dt.strftime("[%m/%d]")
+                    
+                    # 💡 무료 요약 수행
+                    summary_desc = fetch_free_summary(link, raw_desc)
 
                     cat_articles.append({
                         "category": category_name,
                         "date_str": date_str,
                         "title": title,
-                        "description": raw_desc,
+                        "description": summary_desc,
                         "link": link,
                         "pubDate": item["pubDate"],
                         "pub_dt": pub_dt
