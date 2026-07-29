@@ -15,11 +15,14 @@ CLIENT_SECRET = os.getenv("CLIENT_SECRET") or os.getenv("NAVER_CLIENT_SECRET") o
 TRUSTED_SOURCES = [
     "hankyung.com", "mk.co.kr", "sedaily.com", "chosun.com", "joongang.co.kr", 
     "donga.com", "etnews.com", "worklaw.co.kr", "laborplus.co.kr", "hani.co.kr", 
-    "khan.co.kr", "yna.co.kr", "newsis.com"
+    "khan.co.kr", "yna.co.kr", "newsis.com", "inven.co.kr", "thisisgame.com", "gamemeca.com"
 ]
 
-# 💡 와이어프레임 기준 4대 카테고리 검색 키워드
+# 💡 카테고리 구성 (상단 스마일게이트 섹션 + 4대 HR 섹션)
 CATEGORY_KEYWORDS = {
+    "오늘의 스마일게이트": [
+        "스마일게이트"
+    ],
     "HR 트렌드 섹션 (ai등HR/인사 트렌드)": [
         "HR 테크 AI 인사", "인사 트렌드 2026", "HR Analytics 피플"
     ],
@@ -43,30 +46,37 @@ def clean_text(text):
 def is_trusted_source(link):
     return any(domain in link for domain in TRUSTED_SOURCES) if link else False
 
-def is_noise_article(title, raw_desc=""):
+def is_noise_article(title, raw_desc="", category=""):
     full_text = f"{title} {raw_desc}"
+    
+    # 💡 이미지 요구사항: 이혼 키워드 및 사생활/이슈 노이즈 강력 배제
+    if "이혼" in full_text or "재산분할" in full_text or "위자료" in full_text:
+        return True
+
     domain_noise = ["금융감독원", "가계대출", "대출난민", "소상공인", "보건소", "부동산", "아파트", "청약", "코스피", "주가"]
     if any(k in full_text for k in domain_noise): return True
+    
     spec_noise = ["인사발령", "부음", "동정", "부고", "전보", "명예퇴직"]
     if any(bad in title for bad in spec_noise) or re.search(r"\[인사\]|\[부음\]|\[동정\]", title): return True
+    
     return False
 
 def run_collection():
     kst = timezone(timedelta(hours=9))
     now = datetime.now(kst)
-    cutoff_date = now - timedelta(days=7) # 최근 7일 이내 기사
+    cutoff_date = now - timedelta(days=14) # 최근 2주 이내 기사 대상
 
     headers = {"X-Naver-Client-Id": CLIENT_ID, "X-Naver-Client-Secret": CLIENT_SECRET}
     final_articles = []
 
-    print("📡 맞춤 카테고리별 HR 뉴스 수집 시작...")
+    print("📡 맞춤 뉴스 수집 시작...")
 
     for category_name, keywords in CATEGORY_KEYWORDS.items():
         cat_articles = []
         seen_titles = set()
 
         for kw in keywords:
-            url = f"https://openapi.naver.com/v1/search/news.json?query={urllib.parse.quote(kw)}&display=20&sort=date"
+            url = f"https://openapi.naver.com/v1/search/news.json?query={urllib.parse.quote(kw)}&display=30&sort=date"
             res = requests.get(url, headers=headers, verify=False)
             if res.status_code == 200:
                 for item in res.json().get("items", []):
@@ -77,23 +87,18 @@ def run_collection():
                     except: continue
 
                     link = item.get("originallink") or item.get("link", "")
-                    if not is_trusted_source(link): continue
+                    
+                    # 스마일게이트 기사는 신뢰 언론사 조건 유연화
+                    if category_name != "오늘의 스마일게이트" and not is_trusted_source(link): 
+                        continue
 
                     title = clean_text(item["title"])
                     raw_desc = clean_text(item.get("description", ""))
                     
-                    if is_noise_article(title, raw_desc): continue
+                    if is_noise_article(title, raw_desc, category_name): continue
                     if title in seen_titles: continue
                     seen_titles.add(title)
 
-                    domain = link.split("/")[2].replace("www.", "") if "http" in link else "네이버뉴스"
-                    press_map = {
-                        "hankyung.com": "한국경제", "mk.co.kr": "매일경제", "sedaily.com": "서울경제", 
-                        "chosun.com": "조선일보", "joongang.co.kr": "중앙일보", "donga.com": "동아일보", 
-                        "etnews.com": "전자신문", "worklaw.co.kr": "월간노동법률", "laborplus.co.kr": "참여와혁신", 
-                        "hani.co.kr": "한겨레", "khan.co.kr": "경향신문", "yna.co.kr": "연합뉴스", "newsis.com": "뉴시스"
-                    }
-                    press_name = press_map.get(domain, "주요언론")
                     date_str = pub_dt.strftime("[%Y-%m-%d]")
 
                     cat_articles.append({
@@ -102,14 +107,14 @@ def run_collection():
                         "title": title,
                         "description": raw_desc,
                         "link": link,
-                        "press": press_name,
                         "pubDate": item["pubDate"],
                         "pub_dt": pub_dt
                     })
 
         cat_articles.sort(key=lambda x: x["pub_dt"], reverse=True)
-        # 카테고리당 최대 8개까지 수집 (상위 3~4개 노출 + 더보기 접기용)
-        selected = cat_articles[:8]
+        # 스마일게이트는 최대 5개, 나머지는 8개 수집
+        limit = 5 if category_name == "오늘의 스마일게이트" else 8
+        selected = cat_articles[:limit]
         final_articles.extend(selected)
         print(f"  - [{category_name}]: {len(selected)}개 수집 완료")
 
