@@ -45,14 +45,13 @@ TRUSTED_SOURCES = [
     "newsis.com"       # 뉴시스
 ]
 
-# HR 카테고리별 정밀 검색어
 SEARCH_KEYWORDS = [
-    "고용노동부 지침",
-    "근로기준법 판결",
-    "노사 임단협",
-    "기업 성과급 연봉",
-    "기업 채용 조직문화",
-    "HR 테크 AI"
+    "고용노동부 근로감독",
+    "근로기준법 판결 중대재해",
+    "노사 임단협 파업",
+    "기업 성과급 연봉 채용",
+    "기업 조직문화 근무제도",
+    "HR 테크 AI 인사"
 ]
 
 
@@ -81,17 +80,17 @@ def is_trusted_source(link):
 def is_noise_article(title, raw_desc=""):
     full_text = f"{title} {raw_desc}"
 
-    # 지자체, 보건소, 교육청, 학교, 에세이, 소상공인 정책 차단
+    # 지자체, 보건소, 학교, 단순 자원봉사, 에세이 등 노이즈 차단
     noise_patterns = [
         "지자체", "군청", "시청", "구청", "도청", "의회", "지방의회", "경남도", "전남도", "충북도",
         "보건소", "교육청", "교육원", "특수교육원", "진로교육원", "학교", "학생", "교사", 
         "공무원", "주민센터", "면사무소", "읍사무소", "도지사", "시장", "군수", "구청장",
-        "연수", "교과목", "대학", "캠퍼스", "서평", "에세이", "동행론"
+        "연수", "교과목", "대학", "캠퍼스", "서평", "에세이"
     ]
     if any(keyword in full_text for keyword in noise_patterns):
         return True
 
-    # 인사발령, 부고 등 단순 인사동정 차단
+    # 단순 인사발령 차단
     spec_keywords = ["인사발령", "부음", "동정", "부고", "승진", "전보", "전입", "전출", "명예퇴직"]
     if any(bad in title for bad in spec_keywords) or re.search(r"\[인사\]|\[부음\]|\[동정\]", title):
         return True
@@ -100,15 +99,15 @@ def is_noise_article(title, raw_desc=""):
 
 
 # ==========================================
-# 3. GPT 정밀 카테고리 분류(4개 고정) 및 한줄 브리핑 생성
+# 3. GPT 정밀 카테고리 매칭 로직 (엄격한 규칙 적용)
 # ==========================================
 def process_article_with_gpt(title, raw_description):
     """
-    4개 지정 카테고리 중 하나로 분류하고 [국내] 머리말을 붙인 한 줄 브리핑 제목 생성
+    명확한 카테고리 정의와 기준에 따라 기사를 정확하게 분류
     """
     default_res = {
         "is_hr_related": False,
-        "category": "노무 · 근로기준법 · 고용부",
+        "category": "노무 · 근로기준법 · 고용부 이슈",
         "brief_title": f"[국내] {title}",
         "description": raw_description
     }
@@ -118,17 +117,21 @@ def process_article_with_gpt(title, raw_description):
 
     try:
         prompt = f"""
-당신은 민간기업 HR 인사실무자를 위한 핵심 이슈 브리핑 에디터입니다.
-다음 뉴스 기사를 검토하여 민간기업 HR/노무 실무와 연관이 없으면 제외하고, 연관이 있다면 아래 4개 카테고리 중 단 하나를 선택해 분류하세요.
+당신은 기업 HR/인사 전문 에디터입니다.
+아래 뉴스 기사를 읽고, **가장 정확한 카테고리 1개**를 엄격한 기준에 따라 분류해 주세요.
 
-[제외(false) 기준]
-- 지자체, 보건소, 학교/교육청, 공무원, 서평, 소상공인 지원 정책, 단발성 봉사 기사는 무조건 "is_hr_related": false 처리.
+[카테고리 분류 상세 기준 - 매우 중요!]
+1. "노무 · 근로기준법 · 고용부 이슈"
+   - 사망 사고, 중대재해, 특별근로감독, 산재, 노조, 파업, 임단협, 근로기준법, 대법원 판결, 부당해고, 고용노동부 정책/지침 등 **모든 법률/노사/노동 이슈**는 무조건 이 카테고리입니다.
+2. "채용 · 보상 · 조직문화"
+   - 기업의 채용 소식, 성과급/연봉/임금 인상, 조직문화 개선, 유연근무제/재택근무 등 **기업 내부 인사/보상/근무제도** 관련 기사.
+3. "HR 테크 · AI · 디지털"
+   - AI 기반 HR 솔루션, HR Tech 소프트웨어, 학습/교육 디지털 플랫폼(SaaS), HR 데이터 분석 등 **IT/기술 접목 HR** 기사.
+4. "글로벌 HR & 경영 트렌드"
+   - 해외 기업 HR 사례, 글로벌 노동 트렌드, 기타 인사관련 일반 경영 트렌드.
 
-[4개 고정 카테고리 중 선택]
-1. 노무 · 근로기준법 · 고용부 (고용부 정책/지침, 근로기준법, 법원 판례, 부당해고, 근로시간 등)
-2. 노사관계 · 노동계 (노조, 파업, 임단협, 노사 협상/갈등 등)
-3. 채용 · 보상 · 조직문화 (기업 채용, 성과급/연봉, 평가제도, 근무제도, 조직문화)
-4. HR 테크 · AI · 글로벌 (HR Tech 솔루션, AI 인사, 글로벌 HR 트렌드)
+[제외(is_hr_related: false) 기준]
+- 단순 자산운용사/연금 투자의 '기금 운용 평가자' 관련 금융 기사, 장애인공단 등 일반 공공기관 내부 사건사고, 일반 지역 봉사 활동 등 HR 실무와 관련 없는 기사는 false 처리하세요.
 
 [기사 정보]
 - 제목: {title}
@@ -138,18 +141,18 @@ def process_article_with_gpt(title, raw_description):
 JSON 형식으로만 답하세요:
 {{
   "is_hr_related": true 또는 false,
-  "category": "선택한 4개 카테고리명 중 정확히 하나",
-  "brief_title": "[국내] 실무자 관점의 한 줄 핵심 요약 제목 (예: [국내] 대법원, 경영상 해고 시 서면 통지 의무 명확화)",
-  "description": "상세 설명 1~2줄 요약"
+  "category": "위 4개 카테고리명 중 정확히 하나",
+  "brief_title": "[국내] 실무자 관점의 한 줄 요약 제목 (예: [국내] HD현대중공업 노동자 사망 사고... 노조 특별근로감독 촉구)",
+  "description": "인사 실무 관점 1~2줄 핵심 요약"
 }}
 """
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "당신은 HR 인사실무자 전용 뉴스 브리핑을 작성하는 에디터입니다."},
+                {"role": "system", "content": "당신은 기사 내용을 정확하게 분석하여 오분류 없이 HR 카테고리에 매칭하는 전문가입니다."},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.1,
+            temperature=0.0,  # 일관성을 위해 0.0으로 설정
             max_tokens=250,
             response_format={"type": "json_object"}
         )
@@ -158,7 +161,7 @@ JSON 형식으로만 답하세요:
         data = json.loads(result_content)
         return {
             "is_hr_related": data.get("is_hr_related", False),
-            "category": data.get("category", "노무 · 근로기준법 · 고용부"),
+            "category": data.get("category", "노무 · 근로기준법 · 고용부 이슈"),
             "brief_title": data.get("brief_title", f"[국내] {title}"),
             "description": data.get("description", raw_description)
         }
@@ -186,7 +189,7 @@ def fetch_top_hr_news(limit_total=12):
     now = datetime.now(kst)
     cutoff_date = now - timedelta(days=2)
 
-    print(f"🔎 4대 카테고리 맞춤 HR 최신 뉴스 수집 시작... (기준: {cutoff_date.strftime('%Y-%m-%d %H:%M')} 이후)")
+    print(f"🔎 정밀 카테고리 분류 기반 HR 뉴스 수집 시작... (기준: {cutoff_date.strftime('%Y-%m-%d %H:%M')} 이후)")
     
     headers = {
         "X-Naver-Client-Id": CLIENT_ID,
@@ -243,7 +246,7 @@ def fetch_top_hr_news(limit_total=12):
         if not duplicate:
             unique_articles.append(art)
 
-    print(f"📋 {len(unique_articles)}건 대상 GPT 4대 카테고리 정제 중...")
+    print(f"📋 {len(unique_articles)}건 대상 GPT 정밀 매칭 진행 중...")
     final_articles = []
     
     for art in unique_articles:
@@ -267,7 +270,7 @@ def fetch_top_hr_news(limit_total=12):
     df = pd.DataFrame(final_articles)
     if not df.empty:
         df.to_csv("hr_news.csv", index=False, encoding="utf-8-sig")
-        print(f"🎉 [성공] 4개 카테고리 정제 뉴스 {len(df)}건 저장 완료!")
+        print(f"🎉 [성공] 정밀 카테고리 매칭 뉴스 {len(df)}건 저장 완료!")
     else:
         print("⚠️ 조건에 맞는 최신 뉴스 결과가 없습니다.")
 
