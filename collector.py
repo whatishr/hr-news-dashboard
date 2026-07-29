@@ -18,7 +18,6 @@ TRUSTED_SOURCES = [
     "khan.co.kr", "yna.co.kr", "newsis.com", "inven.co.kr", "thisisgame.com", "gamemeca.com"
 ]
 
-# 💡 카테고리 구성 (상단 스마일게이트 섹션 + 4대 HR 섹션)
 CATEGORY_KEYWORDS = {
     "오늘의 스마일게이트": [
         "스마일게이트"
@@ -46,25 +45,19 @@ def clean_text(text):
 def is_trusted_source(link):
     return any(domain in link for domain in TRUSTED_SOURCES) if link else False
 
-def is_noise_article(title, raw_desc="", category=""):
+def is_noise_article(title, raw_desc=""):
     full_text = f"{title} {raw_desc}"
-    
-    # 💡 이미지 요구사항: 이혼 키워드 및 사생활/이슈 노이즈 강력 배제
-    if "이혼" in full_text or "재산분할" in full_text or "위자료" in full_text:
-        return True
-
+    if "이혼" in full_text or "재산분할" in full_text or "위자료" in full_text: return True
     domain_noise = ["금융감독원", "가계대출", "대출난민", "소상공인", "보건소", "부동산", "아파트", "청약", "코스피", "주가"]
     if any(k in full_text for k in domain_noise): return True
-    
     spec_noise = ["인사발령", "부음", "동정", "부고", "전보", "명예퇴직"]
     if any(bad in title for bad in spec_noise) or re.search(r"\[인사\]|\[부음\]|\[동정\]", title): return True
-    
     return False
 
 def run_collection():
     kst = timezone(timedelta(hours=9))
     now = datetime.now(kst)
-    cutoff_date = now - timedelta(days=14) # 최근 2주 이내 기사 대상
+    cutoff_date = now - timedelta(days=14)
 
     headers = {"X-Naver-Client-Id": CLIENT_ID, "X-Naver-Client-Secret": CLIENT_SECRET}
     final_articles = []
@@ -87,19 +80,17 @@ def run_collection():
                     except: continue
 
                     link = item.get("originallink") or item.get("link", "")
-                    
-                    # 스마일게이트 기사는 신뢰 언론사 조건 유연화
-                    if category_name != "오늘의 스마일게이트" and not is_trusted_source(link): 
-                        continue
+                    if category_name != "오늘의 스마일게이트" and not is_trusted_source(link): continue
 
                     title = clean_text(item["title"])
                     raw_desc = clean_text(item.get("description", ""))
                     
-                    if is_noise_article(title, raw_desc, category_name): continue
+                    if is_noise_article(title, raw_desc): continue
                     if title in seen_titles: continue
                     seen_titles.add(title)
 
-                    date_str = pub_dt.strftime("[%Y-%m-%d]")
+                    # 💡 [MM/DD] 포맷 지정 (예: [07/29])
+                    date_str = pub_dt.strftime("[%m/%d]")
 
                     cat_articles.append({
                         "category": category_name,
@@ -112,7 +103,6 @@ def run_collection():
                     })
 
         cat_articles.sort(key=lambda x: x["pub_dt"], reverse=True)
-        # 스마일게이트는 최대 5개, 나머지는 8개 수집
         limit = 5 if category_name == "오늘의 스마일게이트" else 8
         selected = cat_articles[:limit]
         final_articles.extend(selected)

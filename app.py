@@ -1,4 +1,5 @@
 import os
+import re
 import pandas as pd
 import streamlit as st
 
@@ -7,124 +8,145 @@ import streamlit as st
 # ==========================================
 st.set_page_config(
     page_title="게임/플랫폼업계 뉴스",
-    page_icon="📰",
+    page_icon="⚡",
     layout="wide",
 )
 
-# Custom CSS (호버 효과 및 와이어프레임 스타일)
-st.markdown(
-    """
-    <style>
-    .block-container {
-        padding-top: 1.5rem !important;
-        max-width: 95% !important;
-    }
-    .main-header {
-        font-size: 24px;
-        font-weight: 800;
-        color: #111827;
-        margin-bottom: 16px;
-    }
-    
-    /* 오늘의 스마일게이트 상단 박스 */
-    .smile-banner {
-        background-color: #165b7e;
-        color: #ffffff;
-        padding: 18px 24px;
-        border-radius: 4px;
-        margin-bottom: 28px;
-    }
-    .smile-title {
-        font-size: 18px;
-        font-weight: 700;
-        border-bottom: 1px solid rgba(255,255,255,0.3);
-        padding-bottom: 8px;
-        margin-bottom: 12px;
-        color: #ffffff;
-    }
-    .smile-subtitle {
-        font-size: 12px;
-        color: #cbd5e1;
-        margin-bottom: 12px;
-    }
+# Custom CSS
+st.markdown("""
+<style>
+.block-container {
+    padding-top: 2rem !important;
+    max-width: 95% !important;
+}
+.main-header {
+    font-size: 24px;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 20px;
+}
 
-    /* 섹션 제목 스타일 */
-    .sec-title {
-        font-size: 16px;
-        font-weight: 700;
-        color: #1e293b;
-        margin-bottom: 12px;
-        border-bottom: 2px solid #334155;
-        padding-bottom: 6px;
-    }
+/* 오늘의 스마일게이트 배너 */
+.smile-banner {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+}
+.smile-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #334155;
+}
 
-    /* 호버(Hover) 카드 스타일 */
-    .news-hover-card {
-        padding: 6px 8px;
-        border-radius: 4px;
-        margin-bottom: 6px;
-        transition: background-color 0.2s ease;
-        cursor: pointer;
-    }
-    .news-hover-card:hover {
-        background-color: #f1f5f9;
-    }
-    .news-title-line {
-        font-size: 14px;
-        color: #1e293b;
-        font-weight: 600;
-    }
-    .news-link {
-        font-size: 12px;
-        color: #2563eb !important;
-        text-decoration: none;
-        margin-left: 6px;
-    }
-    .news-link:hover {
-        text-decoration: underline;
-    }
+/* 카테고리 타이틀 */
+.sec-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #cbd5e1;
+}
 
-    /* 호버 시 펼쳐지는 내용 요약 */
-    .news-hover-desc {
-        max-height: 0;
-        opacity: 0;
-        overflow: hidden;
-        transition: all 0.3s ease-in-out;
-        font-size: 12.5px;
-        color: #475569;
-        margin-left: 12px;
-    }
-    .news-hover-card:hover .news-hover-desc {
-        max-height: 100px;
-        opacity: 1;
-        margin-top: 4px;
-        padding-top: 4px;
-        border-top: 1px dashed #cbd5e1;
-    }
-    
-    /* 상단 스마일게이트 전용 호버 글자색 */
-    .smile-card:hover {
-        background-color: rgba(255, 255, 255, 0.1) !important;
-    }
-    .smile-card .news-hover-desc {
-        color: #e2e8f0 !important;
-    }
-    .smile-card .news-title-line {
-        color: #ffffff !important;
-    }
-    </style>
-""",
-    unsafe_allow_html=True,
-)
+/* 뉴스 카드 */
+.news-hover-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    transition: all 0.2s ease-in-out;
+}
+.news-hover-card:hover {
+    border-color: #2563eb;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+}
+.news-title-line {
+    font-size: 14px;
+    color: #1e293b;
+    font-weight: 600;
+}
+.date-tag {
+    color: #2563eb;
+    font-weight: 700;
+    margin-right: 6px;
+}
+
+/* 호버 시 펼쳐지는 내용 */
+.news-hover-desc {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+    font-size: 13px;
+    color: #475569;
+    line-height: 1.5;
+}
+.news-hover-card:hover .news-hover-desc {
+    max-height: 150px;
+    opacity: 1;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #e2e8f0;
+}
+
+/* 버튼 */
+.btn-read-more {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 4px 10px;
+    background-color: #2563eb;
+    color: #ffffff !important;
+    font-size: 11.5px;
+    font-weight: 600;
+    border-radius: 4px;
+    text-decoration: none;
+}
+.btn-read-more:hover {
+    background-color: #1d4ed8;
+}
+
+/* 스마일게이트 전용 카드 */
+.smile-card {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+}
+.smile-card:hover {
+    border-color: #38bdf8 !important;
+}
+.smile-card .news-title-line {
+    color: #f8fafc !important;
+}
+.smile-card .date-tag {
+    color: #38bdf8 !important;
+}
+.smile-card .news-hover-desc {
+    color: #cbd5e1 !important;
+    border-top-color: #334155 !important;
+}
+.smile-card .btn-read-more {
+    background-color: #0284c7 !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ==========================================
-# 2. 데이터 로드
+# 2. 데이터 로드 및 날짜 포맷팅
 # ==========================================
 @st.cache_data(ttl=30)
 def load_data():
     if os.path.exists("hr_news.csv"):
         try:
-            return pd.read_csv("hr_news.csv").fillna("")
+            df = pd.read_csv("hr_news.csv").fillna("")
+            # 기존에 [YYYY-MM-DD] 형태로 저장된 데이터가 있더라도 [MM/DD]로 강제 변환
+            if "date_str" in df.columns:
+                df["date_str"] = df["date_str"].apply(lambda x: re.sub(r'\[\d{4}-(\d{2}-\d{2})\]', r'[\1]', str(x)).replace('-', '/'))
+            return df
         except: return pd.DataFrame()
     return pd.DataFrame()
 
@@ -133,23 +155,18 @@ df = load_data()
 # ==========================================
 # 3. 화면 구현
 # ==========================================
-st.markdown('<div class="main-header">게임/플랫폼업계 뉴스</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">⚡ 게임/플랫폼업계 뉴스</div>', unsafe_allow_html=True)
 
 if df.empty:
     st.warning("⚠️ hr_news.csv 데이터가 존재하지 않습니다. python collector.py를 먼저 실행해 주세요.")
 else:
-    # ------------------------------------------
-    # A. 상단 섹션: 오늘의 스마일게이트
-    # ------------------------------------------
+    # A. 오늘의 스마일게이트
     smile_df = df[df["category"] == "오늘의 스마일게이트"]
     
-    smile_html = """
-    <div class="smile-banner">
-        <div class="smile-title">오늘의 스마일게이트</div>
-        <div class="smile-subtitle">아래 카테고리와는 별개로 스마일게이트가 언급된 최신기사 리스팅 (이혼 키워드 제외)</div>
-    """
+    # HTML 내부 들여쓰기 공백 완벽 제거 (한 줄 작성)
+    smile_items_html = ""
     if smile_df.empty:
-        smile_html += "<div style='font-size:13px; color:#e2e8f0;'>최근 수집된 스마일게이트 관련 기사가 없습니다.</div>"
+        smile_items_html = "<div style='font-size:13px; color:#94a3b8;'>최근 수집된 기사가 없습니다.</div>"
     else:
         for _, row in smile_df.head(5).iterrows():
             date_str = row.get("date_str", "")
@@ -157,21 +174,13 @@ else:
             d = row.get("description", "")
             l = row.get("link", "#")
             
-            smile_html += f"""
-            <div class="news-hover-card smile-card">
-                <div class="news-title-line">
-                    <strong>{date_str}</strong> {t} 
-                    <a href="{l}" target="_blank" class="news-link" style="color:#93c5fd !important;">[자세히보기]</a>
-                </div>
-                <div class="news-hover-desc">ㄴ 커서를 올리면: 내용 요약 — {d}</div>
-            </div>
-            """
-    smile_html += "</div>"
-    st.markdown(smile_html, unsafe_allow_html=True)
+            # 태그 사이 줄바꿈을 포함하지 않고 구성하여 Streamlit 코드 블록 감지 방지
+            smile_items_html += f'<div class="news-hover-card smile-card"><div class="news-title-line"><span class="date-tag">{date_str}</span> {t}</div><div class="news-hover-desc">{d}<br><a href="{l}" target="_blank" class="btn-read-more">기사 본문 보기 ➔</a></div></div>'
 
-    # ------------------------------------------
-    # B. 하단 2x2 카테고리 렌더링 함수
-    # ------------------------------------------
+    smile_full_html = f'<div class="smile-banner"><div class="smile-title">🚀 오늘의 스마일게이트</div>{smile_items_html}</div>'
+    st.markdown(smile_full_html, unsafe_allow_html=True)
+
+    # B. 하단 카테고리 렌더링
     def render_section(cat_title):
         sub_df = df[df["category"] == cat_title]
         st.markdown(f'<div class="sec-title">{cat_title}</div>', unsafe_allow_html=True)
@@ -183,49 +192,26 @@ else:
         main_df = sub_df.head(4)
         more_df = sub_df.iloc[4:]
 
-        # 기본 노출 기사
         for _, row in main_df.iterrows():
             date_str = row.get("date_str", "")
             t = row.get("title", "")
             d = row.get("description", "")
             l = row.get("link", "#")
 
-            st.markdown(
-                f"""
-                <div class="news-hover-card">
-                    <div class="news-title-line">
-                        <strong>{date_str}</strong> {t}
-                        <a href="{l}" target="_blank" class="news-link">[자세히보기]</a>
-                    </div>
-                    <div class="news-hover-desc">ㄴ 커서를 올리면: 내용 요약 — {d}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            card_html = f'<div class="news-hover-card"><div class="news-title-line"><span class="date-tag">{date_str}</span> {t}</div><div class="news-hover-desc">{d}<br><a href="{l}" target="_blank" class="btn-read-more">기사 본문 보기 ➔</a></div></div>'
+            st.markdown(card_html, unsafe_allow_html=True)
 
-        # 5개 이상일 경우 더보기 버튼으로 접기
         if not more_df.empty:
-            with st.expander("더보기 (처음 보이는 기사가 5개 이상일 경우 아래로 펼쳐지며 이전 기사 노출)"):
+            with st.expander("▼ 이전 기사 더보기"):
                 for _, row in more_df.iterrows():
                     date_str = row.get("date_str", "")
                     t = row.get("title", "")
                     d = row.get("description", "")
                     l = row.get("link", "#")
 
-                    st.markdown(
-                        f"""
-                        <div class="news-hover-card">
-                            <div class="news-title-line">
-                                <strong>{date_str}</strong> {t}
-                                <a href="{l}" target="_blank" class="news-link">[자세히보기]</a>
-                            </div>
-                            <div class="news-hover-desc">ㄴ 커서를 올리면: 내용 요약 — {d}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+                    card_html = f'<div class="news-hover-card"><div class="news-title-line"><span class="date-tag">{date_str}</span> {t}</div><div class="news-hover-desc">{d}<br><a href="{l}" target="_blank" class="btn-read-more">기사 본문 보기 ➔</a></div></div>'
+                    st.markdown(card_html, unsafe_allow_html=True)
 
-    # 2x2 레이아웃 구성
     col1, col2 = st.columns(2)
 
     with col1:
