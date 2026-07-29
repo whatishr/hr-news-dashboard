@@ -11,97 +11,12 @@ st.set_page_config(
     layout="wide",
 )
 
-
 # ==========================================
-# 2. CSV 데이터 로드 및 파싱 함수
-# ==========================================
-@st.cache_data(ttl=300)
-def load_news_data():
-    if os.path.exists("hr_news.csv"):
-        try:
-            df = pd.read_csv("hr_news.csv")
-            return df
-        except Exception:
-            return None
-    return None
-
-
-df = load_news_data()
-
-
-def get_news_item(df_data, index):
-    """CSV 데이터에서 실제 뉴스 정보를 안전하게 추출하는 함수"""
-    if df_data is not None and len(df_data) > index:
-        row = df_data.iloc[index]
-
-        # 1) 제목 파싱
-        title_val = row.get("title", row.get("제목", "뉴스 제목이 없습니다."))
-        title = (
-            str(title_val)
-            .replace("<b>", "")
-            .replace("</b>", "")
-            .replace("&quot;", '"')
-            .replace("&amp;", "&")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-        )
-
-        # 2) 원문 링크 파싱
-        link_val = row.get(
-            "link", row.get("originallink", row.get("url", "https://news.naver.com"))
-        )
-        link = (
-            str(link_val)
-            if str(link_val).startswith("http")
-            else f"https://{link_val}"
-        )
-
-        # 3) 진짜 요약 데이터 파싱 (제목 복붙하는 예외 로직 완전 제거)
-        desc_val = None
-        for col_name in ["description", "summary", "content", "요약", "본문", "desc"]:
-            if col_name in row.index and pd.notna(row[col_name]):
-                temp = str(row[col_name]).strip()
-                if temp and temp.lower() != "nan":
-                    desc_val = temp
-                    break
-
-        if desc_val:
-            desc = (
-                desc_val.replace("<b>", "")
-                .replace("</b>", "")
-                .replace("&quot;", '"')
-                .replace("&amp;", "&")
-                .replace("&lt;", "<")
-                .replace("&gt;", ">")
-            )
-        else:
-            # CSV에 요약문(description) 데이터가 비어있을 경우 최소한의 수집 안내만 표시
-            desc = "상세 요약 내용이 제공되지 않는 기사입니다. 원문 링크를 통해 확인해 주세요."
-
-        # 4) 언론사/출처 파싱
-        source_val = row.get(
-            "press", row.get("source", row.get("언론사", "네이버뉴스"))
-        )
-        source = str(source_val)
-
-        return title, link, desc, source
-
-    # 데이터가 부족하거나 없을 때의 Fallback
-    return (
-        f"최신 HR 트렌드 이슈 #{index+1}",
-        "https://news.naver.com",
-        "자동 수집된 HR 주요 뉴스의 요약문이 여기에 표시됩니다.",
-        "네이버뉴스",
-    )
-
-
-# ==========================================
-# 3. CSS 적용 (상단 여백 & 폰트 위계 반영)
+# 2. CSS 스타일 설정 (디자인 & 호버 펼치기)
 # ==========================================
 st.markdown(
     """
     <style>
-    /* 상단 잘림 방지용 패딩 조정 */
     .block-container {
         padding-top: 3.5rem !important;
         padding-bottom: 2rem !important;
@@ -130,7 +45,7 @@ st.markdown(
         margin-top: 4px;
     }
 
-    /* 상단 핵심 요약 카드 (상위 위계 폰트 적용) */
+    /* 상단 핵심 요약 카드 */
     .top-card {
         background: #ffffff;
         border: 1px solid #e2e8f0;
@@ -138,18 +53,17 @@ st.markdown(
         border-radius: 10px;
         padding: 16px 18px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        height: 100%;
     }
     .top-card-title {
-        font-size: 15px;
+        font-size: 14.5px;
         font-weight: 700;
         color: #0f172a;
         margin-top: 8px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        line-height: 1.4;
     }
     .top-card-desc {
-        font-size: 13px;
+        font-size: 12.5px;
         color: #475569;
         margin-top: 6px;
         line-height: 1.45;
@@ -180,6 +94,7 @@ st.markdown(
         background: #ecfdf5;
         padding: 3px 8px;
         border-radius: 6px;
+        text-decoration: none;
     }
 
     /* 하단 섹션 박스 */
@@ -200,7 +115,6 @@ st.markdown(
         border-bottom: 1px solid #f1f5f9;
     }
 
-    /* 트렌디한 라벨 칩 */
     .chip-label {
         display: inline-block;
         font-size: 11px;
@@ -212,7 +126,7 @@ st.markdown(
         margin-right: 6px;
     }
 
-    /* 호버 자동 열림 카드 */
+    /* 호버 카드 */
     .hover-card {
         background: #f8fafc;
         border: 1px solid #e2e8f0;
@@ -220,7 +134,6 @@ st.markdown(
         padding: 14px 16px;
         margin-bottom: 12px;
         transition: all 0.2s ease-in-out;
-        cursor: pointer;
     }
     .hover-card:hover {
         border-color: #3b82f6;
@@ -234,7 +147,6 @@ st.markdown(
         color: #1e293b;
     }
 
-    /* 호버 시 펼쳐지는 요약문 영역 (서브 위계 폰트 적용) */
     .hover-details {
         max-height: 0;
         opacity: 0;
@@ -245,7 +157,7 @@ st.markdown(
         overflow: hidden;
     }
     .hover-card:hover .hover-details {
-        max-height: 250px;
+        max-height: 300px;
         opacity: 1;
         margin-top: 10px;
         padding-top: 10px;
@@ -254,11 +166,11 @@ st.markdown(
 
     .btn-link {
         display: inline-block;
-        margin-top: 10px;
-        padding: 5px 12px;
+        margin-top: 8px;
+        padding: 4px 10px;
         background-color: #2563eb;
         color: #ffffff !important;
-        font-size: 11.5px;
+        font-size: 11px;
         font-weight: 600;
         border-radius: 6px;
         text-decoration: none;
@@ -270,6 +182,22 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+
+# ==========================================
+# 3. CSV 데이터 로드 및 파싱
+# ==========================================
+@st.cache_data(ttl=60)
+def load_news_data():
+    if os.path.exists("hr_news.csv"):
+        try:
+            df = pd.read_csv("hr_news.csv")
+            df = df.fillna("")
+            return df
+        except Exception:
+            return pd.DataFrame()
+    return pd.DataFrame()
+
+df = load_news_data()
 
 # ==========================================
 # 4. 화면 레이아웃 구성
@@ -286,165 +214,87 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 뉴스 데이터 추출
-t0, l0, d0, s0 = get_news_item(df, 0)
-t1, l1, d1, s1 = get_news_item(df, 1)
-t2, l2, d2, s2 = get_news_item(df, 2)
-t3, l3, d3, s3 = get_news_item(df, 3)
-t4, l4, d4, s4 = get_news_item(df, 4)
-t5, l5, d5, s5 = get_news_item(df, 5)
+if df.empty:
+    st.warning("⚠️ 등록된 뉴스 데이터가 없거나 hr_news.csv 파일을 읽을 수 없습니다.")
+else:
+    # [2] 상단 핵심 브리핑 (최신 기사 상위 3건 동적 배치)
+    top_3 = df.head(3)
+    c1, c2, c3 = st.columns(3)
+    cols = [c1, c2, c3]
+    colors = [
+        {"border": "#2563eb", "bg": "#eff6ff", "text": "#2563eb"},
+        {"border": "#7c3aed", "bg": "#f3e8ff", "text": "#7c3aed"},
+        {"border": "#d97706", "bg": "#fef3c7", "text": "#d97706"}
+    ]
 
-# [2] 상단 핵심 브리핑 (3컬럼)
-c1, c2, c3 = st.columns(3)
+    for idx, (_, row) in enumerate(top_3.iterrows()):
+        with cols[idx]:
+            cat = row.get("category", "HR 이슈")
+            title = row.get("title", "뉴스 제목 없음")
+            desc = row.get("description", "요약 정보가 없습니다.")
+            link = row.get("link", "#")
+            c_style = colors[idx % 3]
 
-with c1:
-    st.markdown(
-        f"""
-    <div class="top-card">
-        <div>
-            <span class="badge-category">AI / HR Tech</span>
-            <span class="badge-source">{s0}</span>
-            <span class="link-tag">KEY 01 🔗</span>
-        </div>
-        <div class="top-card-title">{t0}</div>
-        <div class="top-card-desc">{d0}</div>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
+            st.markdown(
+                f"""
+            <div class="top-card" style="border-left-color: {c_style['border']};">
+                <div>
+                    <span class="badge-category" style="color:{c_style['text']}; background:{c_style['bg']};">{cat}</span>
+                    <a href="{link}" target="_blank" class="link-tag" style="color:{c_style['text']}; background:{c_style['bg']};">원문 보기 🔗</a>
+                </div>
+                <div class="top-card-title">{title}</div>
+                <div class="top-card-desc">{desc}</div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
 
-with c2:
-    st.markdown(
-        f"""
-    <div class="top-card" style="border-left-color: #7c3aed;">
-        <div>
-            <span class="badge-category" style="color:#7c3aed; background:#f3e8ff;">노무 / 법률</span>
-            <span class="badge-source">{s2}</span>
-            <span class="link-tag" style="color:#7c3aed; background:#f3e8ff;">KEY 02 🔗</span>
-        </div>
-        <div class="top-card-title">{t2}</div>
-        <div class="top-card-desc">{d2}</div>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
+    st.write("")
+    st.write("")
 
-with c3:
-    st.markdown(
-        f"""
-    <div class="top-card" style="border-left-color: #d97706;">
-        <div>
-            <span class="badge-category" style="color:#d97706; background:#fef3c7;">채용 트렌드</span>
-            <span class="badge-source">{s4}</span>
-            <span class="link-tag" style="color:#d97706; background:#fef3c7;">KEY 03 🔗</span>
-        </div>
-        <div class="top-card-title">{t4}</div>
-        <div class="top-card-desc">{d4}</div>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
+    # [3] 하단 4분할 카테고리 섹션 (동적 분류 매칭)
+    categories = [
+        {"name": "📈 HR 트렌드 & HR Tech", "key": "HR 트렌드 & HR Tech", "color_style": "color:#2563eb; background:#eff6ff;"},
+        {"name": "⚖️ 노무 · 근로기준법 · 고용부 이슈", "key": "노무 · 근로기준법 · 고용부 이슈", "color_style": "color:#7c3aed; background:#f3e8ff;"},
+        {"name": "🔍 채용 트렌드 및 이슈", "key": "채용 트렌드 및 이슈", "color_style": "color:#d97706; background:#fef3c7;"},
+        {"name": "👥 조직문화 & 근무제도", "key": "조직문화 & 근무제도", "color_style": "color:#059669; background:#ecfdf5;"}
+    ]
 
-st.write("")
+    col_left, col_right = st.columns(2)
+    grid_cols = [col_left, col_right, col_left, col_right]
 
-# [3] 하단 4분할 격자 박스 (좌/우 2컬럼)
-col_left, col_right = st.columns(2)
+    for idx, cat_info in enumerate(categories):
+        with grid_cols[idx]:
+            # 해당 카테고리에 속하는 기사 동적 필터링
+            sub_df = df[df["category"].str.contains(cat_info["key"].split(" ")[0], na=False, regex=False)]
+            
+            cards_html = ""
+            if sub_df.empty:
+                cards_html = "<div style='font-size:12px; color:#94a3b8; padding:10px;'>최근 수집된 기사가 없습니다.</div>"
+            else:
+                for i, (_, r) in enumerate(sub_df.head(4).iterrows()): # 카테고리당 최대 4개
+                    t = r.get("title", "")
+                    d = r.get("description", "상세 요약이 없습니다.")
+                    l = r.get("link", "#")
+                    
+                    cards_html += f"""
+                    <div class="hover-card">
+                        <div class="hover-title">
+                            <span class="chip-label" style="{cat_info['color_style']}">ISSUE 0{i+1}</span> {t}
+                        </div>
+                        <div class="hover-details">
+                            {d}<br>
+                            <a href="{l}" target="_blank" class="btn-link">기사 원문 읽기 ➔</a>
+                        </div>
+                    </div>
+                    """
 
-with col_left:
-    # 1. HR 트렌드
-    st.markdown(
-        f"""
-    <div class="section-box">
-        <div class="section-title">📈 HR 트렌드 & HR Tech</div>
-        <div class="hover-card">
-            <div class="hover-title">
-                <span class="chip-label">KEY 01</span> {t0}
+            st.markdown(
+                f"""
+            <div class="section-box">
+                <div class="section-title">{cat_info['name']}</div>
+                {cards_html}
             </div>
-            <div class="hover-details">
-                📌 <b>상단 헤드라인 연계 뉴스</b><br>
-                {d0}<br>
-                <a href="{l0}" target="_blank" class="btn-link">기사 원문 읽기 ➔</a>
-            </div>
-        </div>
-        <div class="hover-card" style="margin-bottom:0;">
-            <div class="hover-title">
-                <span class="chip-label">ISSUE 02</span> {t1}
-            </div>
-            <div class="hover-details">
-                {d1}<br>
-                <a href="{l1}" target="_blank" class="btn-link">기사 원문 읽기 ➔</a>
-            </div>
-        </div>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
-    # 3. 채용 트렌드
-    st.markdown(
-        f"""
-    <div class="section-box">
-        <div class="section-title">🔍 채용 트렌드 및 이슈</div>
-        <div class="hover-card" style="margin-bottom:0;">
-            <div class="hover-title">
-                <span class="chip-label" style="color:#d97706; background:#fef3c7;">KEY 03</span> {t4}
-            </div>
-            <div class="hover-details">
-                📌 <b>상단 헤드라인 연계 뉴스</b><br>
-                {d4}<br>
-                <a href="{l4}" target="_blank" class="btn-link">기사 원문 읽기 ➔</a>
-            </div>
-        </div>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
-with col_right:
-    # 2. 노무/법률
-    st.markdown(
-        f"""
-    <div class="section-box">
-        <div class="section-title">⚖️ 노무 · 근로기준법 · 고용부 이슈</div>
-        <div class="hover-card">
-            <div class="hover-title">
-                <span class="chip-label" style="color:#7c3aed; background:#f3e8ff;">KEY 02</span> {t2}
-            </div>
-            <div class="hover-details">
-                📌 <b>상단 헤드라인 연계 뉴스</b><br>
-                {d2}<br>
-                <a href="{l2}" target="_blank" class="btn-link">기사 원문 읽기 ➔</a>
-            </div>
-        </div>
-        <div class="hover-card" style="margin-bottom:0;">
-            <div class="hover-title">
-                <span class="chip-label" style="color:#7c3aed; background:#f3e8ff;">ISSUE 02</span> {t3}
-            </div>
-            <div class="hover-details">
-                {d3}<br>
-                <a href="{l3}" target="_blank" class="btn-link">기사 원문 읽기 ➔</a>
-            </div>
-        </div>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
-    # 4. 조직문화
-    st.markdown(
-        f"""
-    <div class="section-box">
-        <div class="section-title">👥 조직문화 & 근무제도</div>
-        <div class="hover-card" style="margin-bottom:0;">
-            <div class="hover-title">
-                <span class="chip-label" style="color:#059669; background:#ecfdf5;">ISSUE 01</span> {t5}
-            </div>
-            <div class="hover-details">
-                {d5}<br>
-                <a href="{l5}" target="_blank" class="btn-link">기사 원문 읽기 ➔</a>
-            </div>
-        </div>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
+            """,
+                unsafe_allow_html=True,
+            )
