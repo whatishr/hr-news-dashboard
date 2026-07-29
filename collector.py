@@ -38,6 +38,7 @@ def clean_title(title):
     text = re.sub(r"…", " ", text)
     return re.sub(r"\s+", " ", text).strip()
 
+# 💡 실제 기사 본문 및 제목 기반의 정밀 인사이트 추출 로직
 def generate_free_hr_insight(link, title, raw_desc):
     body_text = ""
     try:
@@ -45,33 +46,58 @@ def generate_free_hr_insight(link, title, raw_desc):
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, "html.parser")
             paragraphs = soup.find_all("p")
-            valid = [p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 30 and not any(x in p.get_text() for x in ["기자", "저작권", "무단전재"])]
+            valid = [p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 30 and not any(x in p.get_text() for x in ["기자", "저작권", "무단전재", "무단 전재"])]
             if valid:
                 body_text = " ".join(valid)
     except:
         pass
 
     clean_desc = re.sub("<.*?>", "", raw_desc).replace("&quot;", '"').replace("&amp;", "&").strip()
+    full_text = f"{title} {body_text} {clean_desc}"
 
-    if not body_text or len(body_text) < 50:
-        body_text = clean_desc if clean_desc else title
+    # 1. 핵심 요약 (기사 본문 핵심 문장 가공)
+    if body_text and len(body_text) >= 100:
+        summary = body_text[:240].strip() + "..."
+    elif clean_desc:
+        summary = clean_desc[:240].strip() + "..." if len(clean_desc) > 240 else clean_desc
+    else:
+        summary = f"본 기사는 '{title}'에 관한 상세 소식으로, 관련 노무 및 인사 관리 현황을 다루고 있습니다."
 
-    # 1. 핵심 요약
-    summary = body_text[:200] + "..." if len(body_text) > 200 else body_text
+    # 2. 실무 체크포인트 (기사 키워드 맥락 분석 기반 생성)
+    checkpoints = []
 
-    # 2. 실무 임팩트
-    impact = f"본 이슈는 '{title}' 관련 주요 동향을 다루고 있으며, 향후 기업 내부 HR 운영 및 노무 리스크 관리에 직접적인 영향을 미칠 수 있습니다."
+    # Case A: 취업규칙 / 동의 절차 / 임금피크제 / 판결 관련
+    if any(k in full_text for k in ["임금피크", "동의", "취업규칙", "무효", "대법원", "판결", "통상임금"]):
+        if "동의" in full_text or "전산망" in full_text:
+            checkpoints.append("사내 전산망/온라인 동의 방식이 근로기준법상 '집단적 동의 요건' 또는 서면 동의 절차를 충족하는지 법적 검토 필요")
+        if "임금피크" in full_text:
+            checkpoints.append("현행 임금피크제 도입 시 업무량 감축, 대상조치(보상) 수준이 대법원 정당성 인정 기준에 부합하는지 재점검")
+        else:
+            checkpoints.append("관련 대법원 판결 요지가 당사 인사규정 및 취업규칙 불이익 변경 절차에 미칠 법적 리스크 점검")
 
-    # 3. 실무 체크포인트
-    checkpoints = [
-        "관련 제도 및 정책 변화 동향을 지속 모니터링해야 합니다.",
-        "현재 회사 내 관련 규정 및 프로세스와의 일치 여부를 사전 검토할 필요가 있습니다."
-    ]
+    # Case B: 근로시간 / R&D / 유연근무 / 고용노동부 근로감독
+    elif any(k in full_text for k in ["근로시간", "유연근무", "연장근로", "근로감독", "노동부", "중대재해"]):
+        checkpoints.append("부서별/직무별 근로시간 운영 실태 및 연장근로 한도(주 52시간) 준수 여부 사전 데이터 점검")
+        checkpoints.append("유연근무제 도입 시 근로자대표와의 서면 합의서 체결 및 취업규칙 개정 필요성 검토")
+
+    # Case C: 노사 / 성과급 / 임단협 / 파업 / 보상
+    elif any(k in full_text for k in ["성과급", "노조", "임단협", "임금", "보상", "파업"]):
+        checkpoints.append("경쟁사/동종업계 성과급 지급 체계 및 임금 인상률 동향 비교 분석")
+        checkpoints.append("성과급의 '근로 대가성(임금성)' 인정 여부에 따른 퇴직금 및 통상임금 산정 리스크 점검")
+
+    # Case D: AI / HR 테크 / 채용 / 조직문화
+    elif any(k in full_text for k in ["AI", "채용", "조직문화", "평가", "경력직"]):
+        checkpoints.append("AI 도구 도입 시 개인정보보호법 준수 및 채용 절차의 공정성/투명성 확보 절차 마련")
+        checkpoints.append("내부 직무 역량 평가 기준 정비 및 신규 채용 프로세스 개선안 검토")
+
+    # Default Case (기타 HR 트렌드)
+    if not checkpoints:
+        checkpoints.append(f"기사 내 언급된 주요 이슈('{title[:20]}...')와 관련한 사내 규정 유관 부서 수시 모니터링")
+        checkpoints.append("관련 제도 도입 또는 개정 시 근로자 사전 의견 수렴 및 노사 협의 절차 마련")
 
     return {
         "summary": summary,
-        "impact": impact,
-        "checkpoints": checkpoints
+        "checkpoints": checkpoints[:2] # 최대 2개로 깔끔하게 제한
     }
 
 def is_trusted_source(link):
@@ -91,7 +117,7 @@ def run_collection():
     headers = {"X-Naver-Client-Id": CLIENT_ID, "X-Naver-Client-Secret": CLIENT_SECRET}
     final_articles = []
 
-    print("📡 맞춤 뉴스 수집 및 요약 생성 중...")
+    print("📡 고품질 실무 중심 HR 뉴스 수집 및 추출 시작...")
 
     for category_name, keywords in CATEGORY_KEYWORDS.items():
         cat_articles = []
@@ -126,7 +152,6 @@ def run_collection():
                         "date_str": date_str,
                         "title": title,
                         "summary": insight["summary"],
-                        "impact": insight["impact"],
                         "checkpoints": json.dumps(insight["checkpoints"], ensure_ascii=False),
                         "link": link,
                         "pubDate": item["pubDate"],
@@ -145,7 +170,7 @@ def run_collection():
         if "pub_dt" in new_df.columns:
             new_df = new_df.drop(columns=["pub_dt"])
         new_df.to_csv(CSV_FILE_PATH, index=False, encoding="utf-8-sig")
-        print(f"\n🎉 총 {len(new_df)}개 기사 데이터 저장 완료!")
+        print(f"\n🎉 총 {len(new_df)}개 실무 인사이트 데이터 저장 완료!")
 
 if __name__ == "__main__":
     run_collection()
