@@ -17,7 +17,7 @@ CLIENT_SECRET = os.getenv("CLIENT_SECRET") or os.getenv("NAVER_CLIENT_SECRET") o
 TRUSTED_SOURCES = [
     "hankyung.com", "mk.co.kr", "sedaily.com", "chosun.com", "joongang.co.kr", 
     "donga.com", "etnews.com", "worklaw.co.kr", "laborplus.co.kr", "hani.co.kr", 
-    "khan.co.kr", "yna.co.kr", "newsis.com", "inven.co.kr", "thisisgame.com", "gamemeca.com"
+    "khan.co.kr", "yna.co.kr", "newsis.com", "thisisgame.com", "gamemeca.com"
 ]
 
 CATEGORY_KEYWORDS = {
@@ -38,7 +38,6 @@ def clean_title(title):
     text = re.sub(r"…", " ", text)
     return re.sub(r"\s+", " ", text).strip()
 
-# 💡 무료로 [핵심 요약 / 실무 임팩트 / 실무 체크포인트] 생성 함수
 def generate_free_hr_insight(link, title, raw_desc):
     body_text = ""
     try:
@@ -52,19 +51,21 @@ def generate_free_hr_insight(link, title, raw_desc):
     except:
         pass
 
-    if not body_text:
-        body_text = re.sub("<.*?>", "", raw_desc).replace("&quot;", '"').replace("&amp;", "&").strip()
+    clean_desc = re.sub("<.*?>", "", raw_desc).replace("&quot;", '"').replace("&amp;", "&").strip()
+
+    if not body_text or len(body_text) < 50:
+        body_text = clean_desc if clean_desc else title
 
     # 1. 핵심 요약
-    summary = body_text[:220] + "..." if len(body_text) > 220 else body_text
+    summary = body_text[:200] + "..." if len(body_text) > 200 else body_text
 
-    # 2. 실무 임팩트 (주요 키워드 기반 자동 구성)
-    impact = f"본 기사는 '{title[:25]}...' 관련 주요 동향을 다루고 있으며, 관련된 법적 규제 및 인사 관리 방침에 직접적인 영향을 미칠 수 있습니다."
+    # 2. 실무 임팩트
+    impact = f"본 이슈는 '{title}' 관련 주요 동향을 다루고 있으며, 향후 기업 내부 HR 운영 및 노무 리스크 관리에 직접적인 영향을 미칠 수 있습니다."
 
-    # 3. 실무 체크포인트 (규칙 기반 자동 추출)
+    # 3. 실무 체크포인트
     checkpoints = [
-        "관련 제도 변화 및 산업군 내 적용 사례를 지속 모니터링해야 합니다.",
-        "현재 내부 인사/노무 관련 규정 및 운영 실태와의 일치 여부를 사전 점검할 필요가 있습니다."
+        "관련 제도 및 정책 변화 동향을 지속 모니터링해야 합니다.",
+        "현재 회사 내 관련 규정 및 프로세스와의 일치 여부를 사전 검토할 필요가 있습니다."
     ]
 
     return {
@@ -90,7 +91,7 @@ def run_collection():
     headers = {"X-Naver-Client-Id": CLIENT_ID, "X-Naver-Client-Secret": CLIENT_SECRET}
     final_articles = []
 
-    print("📡 리포팅 스타일 뉴스 수집 및 3단계 인사이트 생성 시작...")
+    print("📡 맞춤 뉴스 수집 및 요약 생성 중...")
 
     for category_name, keywords in CATEGORY_KEYWORDS.items():
         cat_articles = []
@@ -118,8 +119,6 @@ def run_collection():
                     seen_titles.add(title)
 
                     date_str = pub_dt.strftime("[%m/%d]")
-                    
-                    # 💡 3단계 인사이트 생성
                     insight = generate_free_hr_insight(link, title, raw_desc)
 
                     cat_articles.append({
@@ -138,7 +137,7 @@ def run_collection():
         limit = 5 if category_name == "오늘의 스마일게이트" else 8
         selected = cat_articles[:limit]
         final_articles.extend(selected)
-        print(f"  - [{category_name}]: {len(selected)}개 수집 완료")
+        print(f"  - [{category_name}]: {len(selected)}개 완료")
 
     new_df = pd.DataFrame(final_articles)
 
@@ -146,7 +145,7 @@ def run_collection():
         if "pub_dt" in new_df.columns:
             new_df = new_df.drop(columns=["pub_dt"])
         new_df.to_csv(CSV_FILE_PATH, index=False, encoding="utf-8-sig")
-        print(f"\n🎉 총 {len(new_df)}개 기사가 '{CSV_FILE_PATH}'에 저장되었습니다.")
+        print(f"\n🎉 총 {len(new_df)}개 기사 데이터 저장 완료!")
 
 if __name__ == "__main__":
     run_collection()
