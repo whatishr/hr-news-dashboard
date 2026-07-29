@@ -16,7 +16,7 @@ CLIENT_SECRET = os.getenv("CLIENT_SECRET") or os.getenv("NAVER_CLIENT_SECRET") o
 TRUSTED_SOURCES = [
     "hankyung.com", "mk.co.kr", "sedaily.com", "chosun.com", "joongang.co.kr", 
     "donga.com", "etnews.com", "worklaw.co.kr", "laborplus.co.kr", "hani.co.kr", 
-    "khan.co.kr", "yna.co.kr", "newsis.com", "inven.co.kr", "thisisgame.com", "gamemeca.com"
+    "khan.co.kr", "yna.co.kr", "newsis.com", "thisisgame.com", "gamemeca.com"
 ]
 
 CATEGORY_KEYWORDS = {
@@ -29,25 +29,24 @@ CATEGORY_KEYWORDS = {
 
 CSV_FILE_PATH = "hr_news.csv"
 
-# 💡 제목 정제 함수 (말줄임표 제거 및 핵심 제목 추출)
+# 💡 제목 내 모든 말줄임표 및 언론사 라벨 완벽 제거
 def clean_title(title):
     if not title: return ""
     text = re.sub("<.*?>", "", title).replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").strip()
-    # [단독], [포토], [인사] 등의 라벨 제거
+    # [단독], [포토], [기획] 등 수식어 제거
     text = re.sub(r"\[(단독|포토|기획|속보|인사|부음)\]", "", text).strip()
-    # 네이버가 붙인 말줄임표(...) 제거
-    text = re.sub(r"\.\.\.$", "", text).strip()
-    text = re.sub(r"\.\.\.$", "", text).strip()
+    # 제목 중간이나 끝에 붙은 네이버 특유의 말줄임표(..., …) 제거
+    text = re.sub(r"\.{2,}", " ", text)
+    text = re.sub(r"…", " ", text)
+    # 연속된 공백 하나로 정리
+    text = re.sub(r"\s+", " ", text).strip()
     return text
 
-# 💡 무료 본문 요약 함수 (API 없이 HTML 크롤링으로 핵심 1~2문장 추출)
 def fetch_free_summary(link, raw_desc):
     try:
-        # 간단한 웹 요청으로 본문 첫 문장 추출 시도
-        res = requests.get(link, timeout=3, headers={"User-Agent": "Mozilla/5.0"})
+        res = requests.get(link, timeout=2.5, headers={"User-Agent": "Mozilla/5.0"})
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, "html.parser")
-            # 본문 P 태그 검색
             paragraphs = soup.find_all("p")
             valid_texts = []
             for p in paragraphs:
@@ -62,7 +61,6 @@ def fetch_free_summary(link, raw_desc):
     except:
         pass
     
-    # 크롤링 실패 시 API 제공 description 정제 사용 (무료)
     clean_desc = re.sub("<.*?>", "", raw_desc).replace("&quot;", '"').replace("&amp;", "&").strip()
     return clean_desc
 
@@ -86,7 +84,7 @@ def run_collection():
     headers = {"X-Naver-Client-Id": CLIENT_ID, "X-Naver-Client-Secret": CLIENT_SECRET}
     final_articles = []
 
-    print("📡 무료 핵심 뉴스 수집 및 요약 시작...")
+    print("📡 맞춤 뉴스 수집 및 정제 시작...")
 
     for category_name, keywords in CATEGORY_KEYWORDS.items():
         cat_articles = []
@@ -114,8 +112,6 @@ def run_collection():
                     seen_titles.add(title)
 
                     date_str = pub_dt.strftime("[%m/%d]")
-                    
-                    # 💡 무료 요약 수행
                     summary_desc = fetch_free_summary(link, raw_desc)
 
                     cat_articles.append({

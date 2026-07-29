@@ -9,7 +9,6 @@ st.set_page_config(
     layout="wide",
 )
 
-# 💡 CSS 수정: 제목 잘림 방지 (white-space: normal 적용)
 st.markdown("""
 <style>
 .block-container {
@@ -23,22 +22,24 @@ st.markdown("""
     margin-bottom: 20px;
 }
 
+/* 상단 오늘의 스마일게이트 영역 */
 .smile-banner {
     background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
     border: 1px solid #334155;
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 20px 24px;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
 }
 .smile-title {
     font-size: 18px;
     font-weight: 700;
     color: #f8fafc;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
     padding-bottom: 8px;
     border-bottom: 1px solid #334155;
 }
 
+/* 카테고리 헤더 */
 .sec-title {
     font-size: 16px;
     font-weight: 700;
@@ -48,35 +49,41 @@ st.markdown("""
     border-bottom: 2px solid #cbd5e1;
 }
 
+/* 뉴스 카드 - 높이 가변 설정으로 제목 잘림 방지 */
 .news-hover-card {
     background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    padding: 12px 14px;
+    padding: 12px 16px;
     margin-bottom: 10px;
-    transition: all 0.2s ease-in-out;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    height: auto !important; /* 높이 고정 해제 */
 }
 .news-hover-card:hover {
     border-color: #2563eb;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.12);
 }
 
-/* 💡 제목이 잘리지 않고 끝까지 표시되도록 설정 */
+/* 제목 레이아웃 설정 */
 .news-title-line {
     font-size: 14px;
     color: #1e293b;
     font-weight: 600;
-    white-space: normal !important; /* 줄바꿈 허용으로 잘림 방지 */
-    word-break: keep-all;            /* 단어 단위 자연스러운 줄바꿈 */
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    white-space: normal !important; /* 줄바꿈 무조건 허용 */
+    word-break: keep-all;            /* 가독성을 위한 한국어 단어 단위 줄바꿈 */
     line-height: 1.5;
 }
+
 .date-tag {
     color: #2563eb;
     font-weight: 700;
-    margin-right: 6px;
-    display: inline-block;
+    flex-shrink: 0; /* 날짜 태그 줄어듦 방지 */
 }
 
+/* 호버 시 펼쳐지는 요약문 스타일 */
 .news-hover-desc {
     max-height: 0;
     opacity: 0;
@@ -84,23 +91,24 @@ st.markdown("""
     transition: all 0.3s ease-in-out;
     font-size: 13px;
     color: #475569;
-    line-height: 1.5;
+    line-height: 1.6;
 }
 .news-hover-card:hover .news-hover-desc {
-    max-height: 200px;
+    max-height: 250px;
     opacity: 1;
     margin-top: 10px;
     padding-top: 10px;
-    border-top: 1px dashed #e2e8f0;
+    border-top: 1px dashed #cbd5e1;
 }
 
+/* 기사 본문 보기 버튼 */
 .btn-read-more {
     display: inline-block;
     margin-top: 8px;
-    padding: 4px 10px;
+    padding: 4px 12px;
     background-color: #2563eb;
     color: #ffffff !important;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 600;
     border-radius: 4px;
     text-decoration: none;
@@ -109,6 +117,7 @@ st.markdown("""
     background-color: #1d4ed8;
 }
 
+/* 스마일게이트 전용 카드 호버 스타일 */
 .smile-card {
     background: #1e293b !important;
     border: 1px solid #334155 !important;
@@ -163,7 +172,7 @@ else:
             d = row.get("description", "")
             l = row.get("link", "#")
             
-            smile_items_html += f'<div class="news-hover-card smile-card"><div class="news-title-line"><span class="date-tag">{date_str}</span> {t}</div><div class="news-hover-desc">{d}<br><a href="{l}" target="_blank" class="btn-read-more">기사 본문 보기 ➔</a></div></div>'
+            smile_items_html += f'<div class="news-hover-card smile-card"><div class="news-title-line"><span class="date-tag">{date_str}</span><span>{t}</span></div><div class="news-hover-desc">{d}<br><a href="{l}" target="_blank" class="btn-read-more">기사 본문 보기 ➔</a></div></div>'
 
     smile_full_html = f'<div class="smile-banner"><div class="smile-title">🚀 오늘의 스마일게이트</div>{smile_items_html}</div>'
     st.markdown(smile_full_html, unsafe_allow_html=True)
@@ -186,7 +195,7 @@ else:
             d = row.get("description", "")
             l = row.get("link", "#")
 
-            card_html = f'<div class="news-hover-card"><div class="news-title-line"><span class="date-tag">{date_str}</span> {t}</div><div class="news-hover-desc">{d}<br><a href="{l}" target="_blank" class="btn-read-more">기사 본문 보기 ➔</a></div></div>'
+            card_html = f'<div class="news-hover-card"><div class="news-title-line"><span class="date-tag">{date_str}</span><span>{t}</span></div><div class="news-hover-desc">{d}<br><a href="{l}" target="_blank" class="btn-read-more">기사 본문 보기 ➔</a></div></div>'
             st.markdown(card_html, unsafe_allow_html=True)
 
         if not more_df.empty:
@@ -197,7 +206,7 @@ else:
                     d = row.get("description", "")
                     l = row.get("link", "#")
 
-                    card_html = f'<div class="news-hover-card"><div class="news-title-line"><span class="date-tag">{date_str}</span> {t}</div><div class="news-hover-desc">{d}<br><a href="{l}" target="_blank" class="btn-read-more">기사 본문 보기 ➔</a></div></div>'
+                    card_html = f'<div class="news-hover-card"><div class="news-title-line"><span class="date-tag">{date_str}</span><span>{t}</span></div><div class="news-hover-desc">{d}<br><a href="{l}" target="_blank" class="btn-read-more">기사 본문 보기 ➔</a></div></div>'
                     st.markdown(card_html, unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
