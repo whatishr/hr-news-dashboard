@@ -1,152 +1,41 @@
-from datetime import datetime, timedelta, timezone
-from email.utils import parsedate_to_datetime
-import os, re, urllib.parse, json
-import pandas as pd
-import requests, urllib3
-from openai import OpenAI
+name: Daily HR News Collector
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+on:
+  schedule:
+    # 매일 한국 시간 오전 8시 실행 (UTC 기준 23:00)
+    - cron: '0 23 * * *'
+  workflow_dispatch: # GitHub 웹 화면에서 수동으로 실행할 수 있는 버튼 추가
 
-CLIENT_ID = os.getenv("CLIENT_ID") or os.getenv("NAVER_CLIENT_ID") or "n_sOcFCgRFVkTTGUN9W7"
-CLIENT_SECRET = os.getenv("CLIENT_SECRET") or os.getenv("NAVER_CLIENT_SECRET") or "56vRPwOw1b"
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+jobs:
+  collect:
+    runs-on: ubuntu-latest
 
-client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+    steps:
+      - name: 저장소 코드 체크아웃
+        uses: actions/checkout@v3
 
-TRUSTED_SOURCES = [
-    "hankyung.com", "mk.co.kr", "sedaily.com", "chosun.com", "joongang.co.kr", 
-    "donga.com", "etnews.com", "worklaw.co.kr", "laborplus.co.kr", "hani.co.kr", 
-    "khan.co.kr", "yna.co.kr", "newsis.com"
-]
+      - name: 파이썬 환경 설정
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-SEARCH_KEYWORDS = [
-    "고용노동부 근로감독", "근로기준법 판결 중대재해", "노사 임단협 파업",
-    "기업 성과급 연봉 채용", "기업 조직문화 근무제도", "HR 테크 AI 인사"
-]
+      - name: 필요 라이브러리 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas requests openai urllib3
 
-CSV_FILE_PATH = "hr_news.csv"
+      - name: 뉴스 수집 스크립트 실행
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+        run: |
+          python collector.py
 
-def clean_text(text):
-    if not text: return ""
-    return re.sub("<.*?>", "", text).replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").strip()
-
-def is_trusted_source(link):
-    return any(domain in link for domain in TRUSTED_SOURCES) if link else False
-
-def is_noise_article(title, raw_desc=""):
-    full_text = f"{title} {raw_desc}"
-    noise_patterns = ["지자체", "군청", "시청", "구청", "도청", "의회", "보건소", "교육청", "학교", "학생", "공무원", "대학"]
-    if any(k in full_text for k in noise_patterns): return True
-    spec_keywords = ["인사발령", "부음", "동정", "부고", "승진", "전보", "명예퇴직"]
-    if any(bad in title for bad in spec_keywords) or re.search(r"\[인사\]|\[부음\]|\[동정\]", title): return True
-    return False
-
-def process_article_with_gpt(title, raw_description, date_prefix):
-    default_res = {"is_hr_related": False, "category": "HR 트렌드 & HR Tech", "brief_title": f"{date_prefix} [국내] {title}", "description": raw_description}
-    if not client or not OPENAI_API_KEY: return default_res
-
-    try:
-        prompt = f"""
-당신은 기업 HR/인사 전문 에디터입니다.
-아래 기사를 읽고, **4가지 지정 카테고리 중 단 하나를 정확히 선택**해 주세요.
-
-[카테고리 선택 - 정확한 문자열 필수]
-1. "노무 · 근로기준법 · 고용부 이슈"
-2. "채용 트렌드 및 이슈"
-3. "조직문화 & 근무제도"
-4. "HR 트렌드 & HR Tech"
-
-[기사 정보]
-- 제목: {title}
-- 개요: {raw_description}
-
-[응답 형식] JSON:
-{{
-  "is_hr_related": true 또는 false,
-  "category": "선택한 카테고리명 텍스트 그대로",
-  "brief_title": "{date_prefix} [국내] 실무자 관점 한 줄 요약",
-  "description": "인사 실무 관점 1~2줄 요약"
-}}
-"""
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            response_format={"type": "json_object"}
-        )
-        data = json.loads(response.choices[0].message.content.strip())
-        return {
-            "is_hr_related": data.get("is_hr_related", False),
-            "category": data.get("category", "HR 트렌드 & HR Tech"),
-            "brief_title": data.get("brief_title", f"{date_prefix} [국내] {title}"),
-            "description": data.get("description", raw_description)
-        }
-    except Exception as e:
-        return default_res
-
-def run_daily_collection(limit_new=12):
-    kst = timezone(timedelta(hours=9))
-    now = datetime.now(kst)
-    cutoff_date = now - timedelta(hours=24) # 24시간 이내 기사만 수집
-
-    headers = {"X-Naver-Client-Id": CLIENT_ID, "X-Naver-Client-Secret": CLIENT_SECRET}
-    raw_articles = []
-
-    for kw in SEARCH_KEYWORDS:
-        url = f"https://openapi.naver.com/v1/search/news.json?query={urllib.parse.quote(kw)}&display=50&sort=date"
-        res = requests.get(url, headers=headers, verify=False)
-        if res.status_code == 200:
-            for item in res.json().get("items", []):
-                try:
-                    pub_dt = parsedate_to_datetime(item.get("pubDate", ""))
-                    if pub_dt.tzinfo is None: pub_dt = pub_dt.replace(tzinfo=kst)
-                    if pub_dt < cutoff_date: continue
-                except: continue
-
-                link = item.get("originallink") or item.get("link", "")
-                if not is_trusted_source(link): continue
-
-                title = clean_text(item["title"])
-                raw_desc = clean_text(item.get("description", ""))
-                if is_noise_article(title, raw_desc): continue
-
-                raw_articles.append({"title": title, "raw_desc": raw_desc, "link": link, "pubDate": item["pubDate"], "pub_dt": pub_dt})
-
-    raw_articles.sort(key=lambda x: x["pub_dt"], reverse=True)
-    
-    new_articles = []
-    for art in raw_articles:
-        date_prefix = f"[{art['pub_dt'].strftime('%m/%d')}]"
-        ai_res = process_article_with_gpt(art["title"], art["raw_desc"], date_prefix)
-        if not ai_res.get("is_hr_related", False): continue
-
-        new_articles.append({
-            "category": ai_res["category"],
-            "title": ai_res["brief_title"],
-            "description": ai_res["description"],
-            "link": art["link"],
-            "pubDate": art["pubDate"],
-            "pub_dt_iso": art["pub_dt"].isoformat(),
-            "collected_at": now.strftime("%Y-%m-%d %H:%M:%S"),
-        })
-        if len(new_articles) >= limit_new: break
-
-    new_df = pd.DataFrame(new_articles)
-
-    # 기존 CSV에 누적(Append)
-    if os.path.exists(CSV_FILE_PATH):
-        try:
-            existing_df = pd.read_csv(CSV_FILE_PATH)
-            combined_df = pd.concat([new_df, existing_df], ignore_index=True).drop_duplicates(subset=["link"], keep="first")
-        except: combined_df = new_df
-    else:
-        combined_df = new_df
-
-    if not combined_df.empty:
-        if "pub_dt_iso" in combined_df.columns:
-            combined_df = combined_df.sort_values(by="pub_dt_iso", ascending=False)
-        combined_df.to_csv(CSV_FILE_PATH, index=False, encoding="utf-8-sig")
-        print(f"🎉 [매일 수집 성공] 신규 {len(new_df)}건 추가 (총 {len(combined_df)}건)")
-
-if __name__ == "__main__":
-    run_daily_collection()
+      - name: 갱신된 hr_news.csv 커밋 및 푸시
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add hr_news.csv
+          git commit -m "Auto-update: refresh hr_news.csv [skip ci]" || exit 0
+          git push
