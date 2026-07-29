@@ -38,6 +38,19 @@ def clean_text(text):
     t = re.sub(r"…", " ", t)
     return re.sub(r"\s+", " ", t).strip()
 
+# 💡 유사 기사 검증용 키워드 자카드 유사도 판단 함수
+def is_similar_title(new_title, seen_titles_set, threshold=0.4):
+    words_new = set(re.findall(r'[가-힣a-zA-Z0-9]+', new_title))
+    if not words_new: return False
+    
+    for seen_t in seen_titles_set:
+        words_seen = set(re.findall(r'[가-힣a-zA-Z0-9]+', seen_t))
+        intersection = words_new.intersection(words_seen)
+        union = words_new.union(words_seen)
+        if union and (len(intersection) / len(union)) >= threshold:
+            return True
+    return False
+
 def extract_quality_summary_and_checkpoints(category_name, link, title, raw_desc):
     body_paragraphs = []
     try:
@@ -53,22 +66,19 @@ def extract_quality_summary_and_checkpoints(category_name, link, title, raw_desc
 
     clean_desc = clean_text(raw_desc)
     
-    # 💡 요약문 정제 (완성형 문장 2~3개 결합)
     if body_paragraphs:
         summary_sentences = body_paragraphs[:3]
         summary = " ".join(summary_sentences)
-        if len(summary) > 230:
-            summary = summary[:230] + "..."
+        if len(summary) > 220:
+            summary = summary[:220] + "..."
     elif clean_desc:
-        summary = clean_desc if len(clean_desc) <= 230 else clean_desc[:230] + "..."
+        summary = clean_desc if len(clean_desc) <= 220 else clean_desc[:220] + "..."
     else:
-        summary = f"{title} 관련 주요 경과 및 업계 동향에 대한 상세 내용입니다."
+        summary = f"{title} 관련 주요 내용 및 경과입니다."
 
-    # 💡 스마일게이트 카테고리는 체크포인트 불필요
     if category_name == "오늘의 스마일게이트":
         return {"summary": summary, "checkpoints": []}
 
-    # 💡 실제 기사 본문 및 제목 기반의 정밀 체크포인트 생성
     full_content = f"{title} {summary}"
     checkpoints = []
 
@@ -118,7 +128,7 @@ def run_collection():
     headers = {"X-Naver-Client-Id": CLIENT_ID, "X-Naver-Client-Secret": CLIENT_SECRET}
     final_articles = []
 
-    print("📡 고품질 뉴스 수집 및 정제 작업 시작...")
+    print("📡 중복 필터링 및 뉴스 수집 시작...")
 
     for category_name, keywords in CATEGORY_KEYWORDS.items():
         cat_articles = []
@@ -142,7 +152,9 @@ def run_collection():
                     raw_desc = item.get("description", "")
                     
                     if is_noise_article(title, raw_desc): continue
-                    if title in seen_titles: continue
+                    
+                    # 💡 제목 중복 및 유사 기사(어뷰징 기사) 걸러내기
+                    if is_similar_title(title, seen_titles): continue
                     seen_titles.add(title)
 
                     date_str = pub_dt.strftime("[%m/%d]")
