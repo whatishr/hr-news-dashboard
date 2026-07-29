@@ -212,5 +212,5 @@ else:
                 {cards_html}
             </div>
             """,
-                unsafe_allow_html=True,
+                unsafe_allow_html=True,  # 👈 이 옵션을 꼭 추가해주세요!
             )
