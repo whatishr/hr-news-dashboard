@@ -30,74 +30,75 @@ CATEGORY_KEYWORDS = {
 
 CSV_FILE_PATH = "hr_news.csv"
 
-def clean_title(title):
-    if not title: return ""
-    text = re.sub("<.*?>", "", title).replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").strip()
-    text = re.sub(r"\[(단독|포토|기획|속보|인사|부음)\]", "", text).strip()
-    text = re.sub(r"\.{2,}", " ", text)
-    text = re.sub(r"…", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
+def clean_text(text):
+    if not text: return ""
+    t = re.sub("<.*?>", "", text).replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").strip()
+    t = re.sub(r"\[(단독|포토|기획|속보|인사|부음)\]", "", t).strip()
+    t = re.sub(r"\.{2,}", " ", t)
+    t = re.sub(r"…", " ", t)
+    return re.sub(r"\s+", " ", t).strip()
 
-# 💡 실제 기사 본문 및 제목 기반의 정밀 인사이트 추출 로직
-def generate_free_hr_insight(link, title, raw_desc):
-    body_text = ""
+def extract_quality_summary_and_checkpoints(category_name, link, title, raw_desc):
+    body_paragraphs = []
     try:
         res = requests.get(link, timeout=2.5, headers={"User-Agent": "Mozilla/5.0"})
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, "html.parser")
-            paragraphs = soup.find_all("p")
-            valid = [p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 30 and not any(x in p.get_text() for x in ["기자", "저작권", "무단전재", "무단 전재"])]
-            if valid:
-                body_text = " ".join(valid)
+            for p in soup.find_all("p"):
+                txt = p.get_text().strip()
+                if len(txt) > 30 and not any(x in txt for x in ["기자", "저작권", "무단전재", "구독", "무단 전재"]):
+                    body_paragraphs.append(clean_text(txt))
     except:
         pass
 
-    clean_desc = re.sub("<.*?>", "", raw_desc).replace("&quot;", '"').replace("&amp;", "&").strip()
-    full_text = f"{title} {body_text} {clean_desc}"
-
-    # 1. 핵심 요약 (기사 본문 핵심 문장 가공)
-    if body_text and len(body_text) >= 100:
-        summary = body_text[:240].strip() + "..."
+    clean_desc = clean_text(raw_desc)
+    
+    # 💡 요약문 정제 (완성형 문장 2~3개 결합)
+    if body_paragraphs:
+        summary_sentences = body_paragraphs[:3]
+        summary = " ".join(summary_sentences)
+        if len(summary) > 230:
+            summary = summary[:230] + "..."
     elif clean_desc:
-        summary = clean_desc[:240].strip() + "..." if len(clean_desc) > 240 else clean_desc
+        summary = clean_desc if len(clean_desc) <= 230 else clean_desc[:230] + "..."
     else:
-        summary = f"본 기사는 '{title}'에 관한 상세 소식으로, 관련 노무 및 인사 관리 현황을 다루고 있습니다."
+        summary = f"{title} 관련 주요 경과 및 업계 동향에 대한 상세 내용입니다."
 
-    # 2. 실무 체크포인트 (기사 키워드 맥락 분석 기반 생성)
+    # 💡 스마일게이트 카테고리는 체크포인트 불필요
+    if category_name == "오늘의 스마일게이트":
+        return {"summary": summary, "checkpoints": []}
+
+    # 💡 실제 기사 본문 및 제목 기반의 정밀 체크포인트 생성
+    full_content = f"{title} {summary}"
     checkpoints = []
 
-    # Case A: 취업규칙 / 동의 절차 / 임금피크제 / 판결 관련
-    if any(k in full_text for k in ["임금피크", "동의", "취업규칙", "무효", "대법원", "판결", "통상임금"]):
-        if "동의" in full_text or "전산망" in full_text:
-            checkpoints.append("사내 전산망/온라인 동의 방식이 근로기준법상 '집단적 동의 요건' 또는 서면 동의 절차를 충족하는지 법적 검토 필요")
-        if "임금피크" in full_text:
-            checkpoints.append("현행 임금피크제 도입 시 업무량 감축, 대상조치(보상) 수준이 대법원 정당성 인정 기준에 부합하는지 재점검")
+    if any(k in full_content for k in ["임금피크", "동의", "취업규칙", "무효", "대법원", "판결", "통상임금"]):
+        if "동의" in full_content or "전산망" in full_content:
+            checkpoints.append("사내 전산망/온라인 동의 방식이 법상 근로자 집단적 동의 요건을 만족하는지 서면 절차 검토")
+        if "임금피크" in full_content:
+            checkpoints.append("도입 시 업무량 감축 및 대상조치(보상) 수준이 대법원 정당성 판정 기준에 부합하는지 재점검")
         else:
-            checkpoints.append("관련 대법원 판결 요지가 당사 인사규정 및 취업규칙 불이익 변경 절차에 미칠 법적 리스크 점검")
+            checkpoints.append("판결 취지가 당사 인사규정 및 취업규칙 개정 절차에 미치는 리스크 검토")
 
-    # Case B: 근로시간 / R&D / 유연근무 / 고용노동부 근로감독
-    elif any(k in full_text for k in ["근로시간", "유연근무", "연장근로", "근로감독", "노동부", "중대재해"]):
-        checkpoints.append("부서별/직무별 근로시간 운영 실태 및 연장근로 한도(주 52시간) 준수 여부 사전 데이터 점검")
-        checkpoints.append("유연근무제 도입 시 근로자대표와의 서면 합의서 체결 및 취업규칙 개정 필요성 검토")
+    elif any(k in full_content for k in ["근로시간", "유연근무", "연장근로", "근로감독", "노동부"]):
+        checkpoints.append("부서별 근로시간 운영 현황 및 주 52시간 한도 준수 여부 사전 모니터링")
+        checkpoints.append("유연근무제 운영 시 근로자대표 서면합의서 체결 및 규정 개정 필요성 점검")
 
-    # Case C: 노사 / 성과급 / 임단협 / 파업 / 보상
-    elif any(k in full_text for k in ["성과급", "노조", "임단협", "임금", "보상", "파업"]):
-        checkpoints.append("경쟁사/동종업계 성과급 지급 체계 및 임금 인상률 동향 비교 분석")
-        checkpoints.append("성과급의 '근로 대가성(임금성)' 인정 여부에 따른 퇴직금 및 통상임금 산정 리스크 점검")
+    elif any(k in full_content for k in ["성과급", "노조", "임단협", "임금", "보상", "파업"]):
+        checkpoints.append("동종업계 성과급 지급 체계 및 임금 인상률 동향 비교 분석")
+        checkpoints.append("성과급의 임금성(근로 대가성) 인정 여부에 따른 퇴직금/통상임금 영향 사전 검토")
 
-    # Case D: AI / HR 테크 / 채용 / 조직문화
-    elif any(k in full_text for k in ["AI", "채용", "조직문화", "평가", "경력직"]):
-        checkpoints.append("AI 도구 도입 시 개인정보보호법 준수 및 채용 절차의 공정성/투명성 확보 절차 마련")
-        checkpoints.append("내부 직무 역량 평가 기준 정비 및 신규 채용 프로세스 개선안 검토")
+    elif any(k in full_content for k in ["AI", "채용", "조직문화", "평가"]):
+        checkpoints.append("AI 도입 시 개인정보 처리 동의 및 채용 절차의 공정성/투명성 점검")
+        checkpoints.append("내부 평가 및 채용 프로세스 가이드라인 최신화 검토")
 
-    # Default Case (기타 HR 트렌드)
     if not checkpoints:
-        checkpoints.append(f"기사 내 언급된 주요 이슈('{title[:20]}...')와 관련한 사내 규정 유관 부서 수시 모니터링")
-        checkpoints.append("관련 제도 도입 또는 개정 시 근로자 사전 의견 수렴 및 노사 협의 절차 마련")
+        checkpoints.append(f"기사 주요 이슈('{title[:18]}...') 관련 사내 규정 및 노무 영향도 검토")
+        checkpoints.append("제도 변경 시 근로자 사전 의견 수렴 및 노사 협의 절차 이행")
 
     return {
         "summary": summary,
-        "checkpoints": checkpoints[:2] # 최대 2개로 깔끔하게 제한
+        "checkpoints": checkpoints[:2]
     }
 
 def is_trusted_source(link):
@@ -117,7 +118,7 @@ def run_collection():
     headers = {"X-Naver-Client-Id": CLIENT_ID, "X-Naver-Client-Secret": CLIENT_SECRET}
     final_articles = []
 
-    print("📡 고품질 실무 중심 HR 뉴스 수집 및 추출 시작...")
+    print("📡 고품질 뉴스 수집 및 정제 작업 시작...")
 
     for category_name, keywords in CATEGORY_KEYWORDS.items():
         cat_articles = []
@@ -137,7 +138,7 @@ def run_collection():
                     link = item.get("originallink") or item.get("link", "")
                     if category_name != "오늘의 스마일게이트" and not is_trusted_source(link): continue
 
-                    title = clean_title(item["title"])
+                    title = clean_text(item["title"])
                     raw_desc = item.get("description", "")
                     
                     if is_noise_article(title, raw_desc): continue
@@ -145,7 +146,7 @@ def run_collection():
                     seen_titles.add(title)
 
                     date_str = pub_dt.strftime("[%m/%d]")
-                    insight = generate_free_hr_insight(link, title, raw_desc)
+                    insight = extract_quality_summary_and_checkpoints(category_name, link, title, raw_desc)
 
                     cat_articles.append({
                         "category": category_name,
@@ -170,7 +171,7 @@ def run_collection():
         if "pub_dt" in new_df.columns:
             new_df = new_df.drop(columns=["pub_dt"])
         new_df.to_csv(CSV_FILE_PATH, index=False, encoding="utf-8-sig")
-        print(f"\n🎉 총 {len(new_df)}개 실무 인사이트 데이터 저장 완료!")
+        print(f"\n🎉 데이터 저장 완료!")
 
 if __name__ == "__main__":
     run_collection()
