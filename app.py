@@ -1,236 +1,1005 @@
-import os
-import re
+from __future__ import annotations
+
+import ast
+import html
 import json
+import os
+from urllib.parse import urlparse
+
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(
-    page_title="HR 인텔리전스 콘솔",
-    page_icon="⚡",
-    layout="wide",
+
+# ============================================================
+# 기본 설정
+# ============================================================
+
+CSV_FILE_PATH = (
+    r"D:\Local developing\HR-news dashboard\hr_news.csv"
 )
 
-# 💡 css 글자 크기를 명확하게 !important 강제 지정
-st.markdown("""
+st.set_page_config(
+    page_title="HR 뉴스 대시보드",
+    page_icon="📰",
+    layout="wide"
+)
+
+
+# ============================================================
+# 스타일
+# ============================================================
+
+st.markdown(
+    """
 <style>
-.block-container {
-    padding-top: 1.5rem !important;
-    max-width: 95% !important;
-}
-.main-header {
-    font-size: 20px !important;
-    font-weight: 800 !important;
-    color: #0f172a !important;
-    margin-bottom: 16px !important;
-}
+    /* Streamlit 기본 상단 여백 축소 */
+    .block-container {
+        max-width: 1480px;
+        padding-top: 2rem !important;
+        padding-bottom: 3rem !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+    }
 
-.sec-title {
-    font-size: 14px !important;
-    font-weight: 700 !important;
-    color: #0f172a !important;
-    margin-top: 6px !important;
-    margin-bottom: 8px !important;
-    padding-bottom: 4px !important;
-    border-bottom: 2px solid #cbd5e1 !important;
-}
+    .main {
+        background-color: #f8fafc;
+    }
 
-/* 카드 기본 레이아웃 */
-.news-hover-card {
-    background: #ffffff !important;
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 6px !important;
-    padding: 10px 12px !important;
-    margin-bottom: 8px !important;
-    transition: all 0.2s ease-in-out;
-}
-.news-hover-card:hover {
-    border-color: #2563eb !important;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08) !important;
-}
+    body,
+    div,
+    span,
+    a,
+    button {
+        font-family:
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            Roboto,
+            Arial,
+            sans-serif;
+    }
 
-.news-title-line {
-    font-size: 13px !important;
-    color: #0f172a !important;
-    font-weight: 600 !important;
-    line-height: 1.4 !important;
-    word-break: keep-all !important;
-}
-.date-tag {
-    color: #2563eb !important;
-    font-weight: 700 !important;
-    margin-right: 4px !important;
-}
+    /* Streamlit 상단 헤더 공간 완화 */
+    header[data-testid="stHeader"] {
+        height: 2.5rem;
+        background-color: transparent;
+    }
 
-/* 호버 펼침 */
-.news-hover-desc {
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.news-hover-card:hover .news-hover-desc {
-    max-height: 350px;
-    opacity: 1;
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px dashed #e2e8f0;
-}
+    /* ============================================
+       오늘의 스마일게이트
+       ============================================ */
 
-/* 💡 글자 크기 최적화 (라벨: 12px, 본문/리스트: 12px~12.5px) */
-.section-label {
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    margin-top: 6px !important;
-    margin-bottom: 4px !important;
-}
-.blue-label { color: #0284c7 !important; }
-.green-label { color: #059669 !important; }
+    .sg-container {
+        background-color: #1b2230;
+        border: 1px solid #283244;
+        border-radius: 9px;
+        padding: 13px 16px;
+        margin-top: 0;
+        margin-bottom: 18px;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.10);
+    }
 
-.summary-box {
-    background-color: #f8fafc !important;
-    border-left: 3px solid #0284c7 !important;
-    padding: 6px 10px !important;
-    font-size: 12px !important;
-    font-weight: 400 !important;
-    color: #334155 !important;
-    line-height: 1.5 !important;
-    border-radius: 0 4px 4px 0 !important;
-    margin-bottom: 6px !important;
-}
+    .sg-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #ffffff;
+        margin-bottom: 9px;
+        letter-spacing: -0.2px;
+    }
 
-.chk-list {
-    background-color: #f0fdf4 !important;
-    border-left: 3px solid #059669 !important;
-    padding: 6px 10px 6px 22px !important;
-    font-size: 12px !important;
-    font-weight: 400 !important;
-    color: #14532d !important;
-    line-height: 1.45 !important;
-    border-radius: 0 4px 4px 0 !important;
-    margin-top: 2px !important;
-    margin-bottom: 8px !important;
-}
+    .sg-card {
+        background-color: #242d3f;
+        border: 1px solid #303b50;
+        border-radius: 6px;
+        margin-bottom: 6px;
+        overflow: hidden;
+        transition:
+            border-color 0.18s ease,
+            background-color 0.18s ease;
+    }
 
-.chk-list li {
-    font-size: 12px !important;
-    margin-bottom: 2px !important;
-}
+    .sg-card:last-child {
+        margin-bottom: 0;
+    }
 
-.btn-read-more {
-    display: inline-block !important;
-    margin-top: 2px !important;
-    padding: 3px 8px !important;
-    background-color: #2563eb !important;
-    color: #ffffff !important;
-    font-size: 11px !important;
-    font-weight: 600 !important;
-    border-radius: 4px !important;
-    text-decoration: none !important;
-}
+    .sg-card:hover {
+        border-color: #64748b;
+        background-color: #293449;
+    }
 
-/* 스마일게이트 다크 스타일 */
-.smile-banner {
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
-    border: 1px solid #334155 !important;
-    border-radius: 8px !important;
-    padding: 14px 18px !important;
-    margin-bottom: 16px !important;
-}
-.smile-title {
-    font-size: 15px !important;
-    font-weight: 700 !important;
-    color: #f8fafc !important;
-    margin-bottom: 10px !important;
-    padding-bottom: 4px !important;
-    border-bottom: 1px solid #334155 !important;
-}
-.smile-card {
-    background: #1e293b !important;
-    border: 1px solid #334155 !important;
-}
-.smile-card .news-title-line {
-    color: #f8fafc !important;
-}
-.smile-card .date-tag {
-    color: #38bdf8 !important;
-}
-.smile-card .summary-box {
-    background-color: #0f172a !important;
-    color: #cbd5e1 !important;
-}
+    .sg-card-header {
+        padding: 8px 11px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #f8fafc;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+    }
+
+    .sg-date-tag {
+        color: #60a5fa;
+        font-weight: 700;
+        margin-right: 8px;
+        flex-shrink: 0;
+    }
+
+    .sg-title-text {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sg-card-body {
+        max-height: 0;
+        overflow: hidden;
+        padding: 0 11px;
+        background-color: #202838;
+        transition:
+            max-height 0.25s ease-out,
+            padding 0.25s ease-out;
+    }
+
+    .sg-card:hover .sg-card-body {
+        max-height: 1800px !important;
+        padding: 10px 11px;
+        border-top: 1px solid #344056;
+    }
+
+    /* ============================================
+       일반 뉴스 카드
+       ============================================ */
+
+    .news-card {
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 7px;
+        margin-bottom: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+        transition:
+            border-color 0.18s ease,
+            box-shadow 0.18s ease;
+    }
+
+    .news-card:hover {
+        border-color: #94a3b8;
+        box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06);
+    }
+
+    .card-header {
+        min-height: 32px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #1e293b;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+    }
+
+    .date-tag {
+        color: #2563eb;
+        font-weight: 700;
+        margin-right: 7px;
+        flex-shrink: 0;
+    }
+
+    .card-title-text {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .card-body {
+        max-height: 0;
+        overflow: hidden;
+        padding: 0 10px;
+        background-color: #ffffff;
+        transition:
+            max-height 0.25s ease-out,
+            padding 0.25s ease-out;
+    }
+
+    .news-card:hover .card-body {
+        max-height: 1800px !important;
+        padding: 10px;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    /* ============================================
+       카드 상세 내용
+       ============================================ */
+
+    .summary-title-sg {
+        color: #fca5a5;
+        font-weight: 700;
+        font-size: 11px;
+        margin-bottom: 4px;
+    }
+
+    .summary-box-sg {
+        font-size: 11px;
+        color: #d6deea;
+        line-height: 1.55;
+        white-space: normal;
+        margin-bottom: 8px;
+        word-break: keep-all;
+    }
+
+    .summary-title-normal {
+        color: #b91c1c;
+        font-weight: 700;
+        font-size: 11px;
+        margin-bottom: 4px;
+    }
+
+    .summary-box {
+        font-size: 11px;
+        color: #334155;
+        line-height: 1.55;
+        white-space: normal;
+        margin-bottom: 8px;
+        word-break: keep-all;
+    }
+
+    .checkpoint-title {
+        color: #15803d;
+        font-weight: 700;
+        font-size: 11px;
+        margin-bottom: 4px;
+    }
+
+    .checkpoint-box {
+        background-color: #f7fbf8;
+        border: 1px solid #dcefe1;
+        border-radius: 4px;
+        padding: 7px 9px;
+        font-size: 11px;
+        color: #166534;
+        margin-bottom: 7px;
+        word-break: keep-all;
+    }
+
+    .checkpoint-item {
+        margin-bottom: 3px;
+        line-height: 1.45;
+    }
+
+    .checkpoint-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .btn-link {
+        display: inline-block;
+        background-color: #334155;
+        color: #ffffff !important;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 4px 9px;
+        border-radius: 4px;
+        text-decoration: none !important;
+        margin-top: 2px;
+    }
+
+    .btn-link:hover {
+        background-color: #1e293b;
+    }
+
+    /* ============================================
+       섹션
+       ============================================ */
+
+    .sec-header {
+        font-size: 14px;
+        font-weight: 700;
+        color: #1e293b;
+        margin-top: 18px;
+        margin-bottom: 10px;
+        padding-bottom: 7px;
+        border-bottom: 1px solid #e2e8f0;
+        letter-spacing: -0.2px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+    }
+
+    .sec-marker {
+        width: 4px;
+        height: 16px;
+        border-radius: 3px;
+        background-color: #475569;
+        display: inline-block;
+        flex-shrink: 0;
+    }
+
+    .sec-count {
+        color: #94a3b8;
+        font-size: 11px;
+        font-weight: 500;
+        margin-left: auto;
+    }
+
+    .empty-section-box {
+        background-color: #ffffff;
+        border: 1px dashed #cbd5e1;
+        border-radius: 6px;
+        padding: 18px 10px;
+        text-align: center;
+        color: #94a3b8;
+        font-size: 11px;
+        margin-bottom: 8px;
+    }
+
+    /* ============================================
+       더보기
+       ============================================ */
+
+    div[data-testid="stExpander"] {
+        border: 1px solid #dce3ec !important;
+        border-radius: 6px !important;
+        background-color: #f8fafc !important;
+        margin-top: 2px !important;
+        margin-bottom: 4px !important;
+        box-shadow: none !important;
+    }
+
+    div[data-testid="stExpander"] summary p {
+        min-height: 0 !important;
+        padding: 2px 8px !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        color: #64748b !important;
+        background-color: #f8fafc !important;
+        border-radius: 6px !important;
+    }
+
+    div[data-testid="stExpander"] summary:hover {
+        color: #334155 !important;
+        background-color: #f1f5f9 !important;
+    }
+
+    div[data-testid="stExpanderDetails"] {
+        padding-top: 2px !important;
+        padding-bottom: 0px !important;
+    }
+
+    /* 컬럼 사이 간격 */
+    div[data-testid="stHorizontalBlock"] {
+        gap: 1.1rem;
+    }
+
+
+    /* 좁은 화면 대응 */
+    @media (max-width: 900px) {
+        .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+    }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True
+)
 
-@st.cache_data(ttl=30)
-def load_data():
-    if os.path.exists("hr_news.csv"):
-        try:
-            df = pd.read_csv("hr_news.csv").fillna("")
-            if "date_str" in df.columns:
-                df["date_str"] = df["date_str"].apply(lambda x: re.sub(r'\[\d{4}-(\d{2}-\d{2})\]', r'[\1]', str(x)).replace('-', '/'))
-            return df
-        except: return pd.DataFrame()
-    return pd.DataFrame()
 
-df = load_data()
+# ============================================================
+# 데이터 로딩
+# ============================================================
 
-st.markdown('<div class="main-header">⚡ HR 인텔리전스 콘솔</div>', unsafe_allow_html=True)
+def get_csv_modified_time() -> float:
+    if not os.path.exists(CSV_FILE_PATH):
+        return 0.0
+
+    try:
+        return os.path.getmtime(
+            CSV_FILE_PATH
+        )
+    except OSError:
+        return 0.0
+
+
+@st.cache_data(show_spinner=False)
+def load_data(
+    file_path: str,
+    modified_time: float
+) -> pd.DataFrame:
+    """
+    CSV 수정 시각을 캐시 키로 사용하여
+    수집 완료 후 새 데이터를 자동으로 다시 읽습니다.
+    """
+
+    del modified_time
+
+    if not os.path.exists(file_path):
+        return pd.DataFrame()
+
+    try:
+        data_frame = pd.read_csv(
+            file_path,
+            encoding="utf-8-sig",
+            dtype=str,
+            keep_default_na=False
+        )
+
+    except UnicodeDecodeError:
+        data_frame = pd.read_csv(
+            file_path,
+            encoding="utf-8",
+            dtype=str,
+            keep_default_na=False
+        )
+
+    except Exception as error:
+        st.error(
+            f"CSV 파일을 읽는 중 오류가 발생했습니다: {error}"
+        )
+        return pd.DataFrame()
+
+    required_columns = [
+        "category",
+        "date_str",
+        "title",
+        "summary",
+        "checkpoints",
+        "link",
+        "pubDate"
+    ]
+
+    for column in required_columns:
+        if column not in data_frame.columns:
+            data_frame[column] = ""
+
+    data_frame = data_frame.fillna("")
+
+    if "pubDate" in data_frame.columns:
+        data_frame["_sort_date"] = pd.to_datetime(
+            data_frame["pubDate"],
+            errors="coerce",
+            utc=True
+        )
+
+        data_frame = data_frame.sort_values(
+            by="_sort_date",
+            ascending=False,
+            na_position="last"
+        )
+
+        data_frame = data_frame.drop(
+            columns=["_sort_date"],
+            errors="ignore"
+        )
+
+    return data_frame.reset_index(
+        drop=True
+    )
+
+
+# ============================================================
+# 데이터 안전 처리
+# ============================================================
+
+def safe_text(
+    value: object,
+    default: str = ""
+) -> str:
+    if value is None:
+        return html.escape(
+            default,
+            quote=True
+        )
+
+    text = str(value).strip()
+
+    if not text:
+        text = default
+
+    return html.escape(
+        text,
+        quote=True
+    )
+
+
+def safe_multiline_text(
+    value: object,
+    default: str
+) -> str:
+    text = safe_text(
+        value,
+        default
+    )
+
+    return text.replace(
+        "\n",
+        "<br>"
+    )
+
+
+def safe_url(
+    value: object
+) -> str:
+    url = str(
+        value or ""
+    ).strip()
+
+    if not url:
+        return ""
+
+    try:
+        parsed = urlparse(
+            url
+        )
+
+        if parsed.scheme not in {
+            "http",
+            "https"
+        }:
+            return ""
+
+        return html.escape(
+            url,
+            quote=True
+        )
+
+    except ValueError:
+        return ""
+
+
+def parse_checkpoints(
+    value: object
+) -> list[str]:
+    if value is None:
+        return []
+
+    if isinstance(
+        value,
+        list
+    ):
+        return [
+            str(item).strip()
+            for item in value
+            if str(item).strip()
+        ]
+
+    text = str(
+        value
+    ).strip()
+
+    if not text:
+        return []
+
+    try:
+        parsed = json.loads(
+            text
+        )
+
+        if isinstance(
+            parsed,
+            list
+        ):
+            return [
+                str(item).strip()
+                for item in parsed
+                if str(item).strip()
+            ]
+
+    except (
+        json.JSONDecodeError,
+        TypeError
+    ):
+        pass
+
+    try:
+        parsed = ast.literal_eval(
+            text
+        )
+
+        if isinstance(
+            parsed,
+            list
+        ):
+            return [
+                str(item).strip()
+                for item in parsed
+                if str(item).strip()
+            ]
+
+    except (
+        ValueError,
+        SyntaxError
+    ):
+        pass
+
+    values = [
+        text
+    ]
+
+    for separator in [
+        "\n",
+        "•",
+        "|"
+    ]:
+        split_values = []
+
+        for current_value in values:
+            split_values.extend(
+                current_value.split(
+                    separator
+                )
+            )
+
+        values = split_values
+
+    return [
+        item.strip(
+            " -•\t"
+        )
+        for item in values
+        if item.strip(
+            " -•\t"
+        )
+    ]
+
+
+# ============================================================
+# 카드 생성
+# ============================================================
+
+def build_link_html(
+    link: object
+) -> str:
+    safe_link = safe_url(
+        link
+    )
+
+    if not safe_link:
+        return (
+            '<span style="font-size:10px;color:#94a3b8;">'
+            "원문 링크 없음"
+            "</span>"
+        )
+
+    return (
+        f'<a href="{safe_link}" '
+        'target="_blank" '
+        'rel="noopener noreferrer" '
+        'class="btn-link">'
+        "원문 보기"
+        "</a>"
+    )
+
+
+def build_card_html(
+    row: pd.Series,
+    is_sg: bool = False
+) -> str:
+    checkpoints = parse_checkpoints(
+        row.get(
+            "checkpoints",
+            ""
+        )
+    )
+
+    checkpoint_items = "".join(
+        (
+            '<div class="checkpoint-item">'
+            f"• {safe_text(checkpoint)}"
+            "</div>"
+        )
+        for checkpoint in checkpoints
+    )
+
+    if not checkpoint_items:
+        checkpoint_items = (
+            '<div class="checkpoint-item">'
+            "• 별도 체크포인트가 없습니다."
+            "</div>"
+        )
+
+    summary = safe_multiline_text(
+        row.get(
+            "summary",
+            ""
+        ),
+        "요약 정보가 없습니다."
+    )
+
+    raw_title = str(
+        row.get(
+            "title",
+            ""
+        )
+    )
+
+    raw_title = (
+        raw_title
+        .replace(
+            "[국내]",
+            ""
+        )
+        .replace(
+            "[해외]",
+            ""
+        )
+        .strip()
+    )
+
+    clean_title = safe_text(
+        raw_title,
+        "제목 없음"
+    )
+
+    date_str = safe_text(
+        row.get(
+            "date_str",
+            ""
+        )
+    )
+
+    link_html = build_link_html(
+        row.get(
+            "link",
+            ""
+        )
+    )
+
+    if is_sg:
+        return (
+            '<div class="sg-card">'
+            '<div class="sg-card-header">'
+            f'<span class="sg-date-tag">{date_str}</span>'
+            f'<span class="sg-title-text" '
+            f'title="{clean_title}">'
+            f"{clean_title}"
+            "</span>"
+            "</div>"
+            '<div class="sg-card-body">'
+            '<div class="summary-title-sg">'
+            "주요 요약"
+            "</div>"
+            f'<div class="summary-box-sg">{summary}</div>'
+            f"{link_html}"
+            "</div>"
+            "</div>"
+        )
+
+    return (
+        '<div class="news-card">'
+        '<div class="card-header">'
+        f'<span class="date-tag">{date_str}</span>'
+        f'<span class="card-title-text" '
+        f'title="{clean_title}">'
+        f"{clean_title}"
+        "</span>"
+        "</div>"
+        '<div class="card-body">'
+        '<div class="summary-title-normal">'
+        "핵심 요약"
+        "</div>"
+        f'<div class="summary-box">{summary}</div>'
+        '<div class="checkpoint-title">'
+        "실무 체크포인트"
+        "</div>"
+        '<div class="checkpoint-box">'
+        f"{checkpoint_items}"
+        "</div>"
+        f"{link_html}"
+        "</div>"
+        "</div>"
+    )
+
+
+# ============================================================
+# 카테고리 렌더링
+# ============================================================
+
+def render_category_with_more(
+    data_frame: pd.DataFrame,
+    display_title: str,
+    category_key: str
+) -> None:
+    category_data = data_frame[
+        data_frame["category"]
+        == category_key
+    ]
+
+    count = len(
+        category_data
+    )
+
+    st.markdown(
+        (
+            '<div class="sec-header">'
+            '<span class="sec-marker"></span>'
+            f"<span>{html.escape(display_title)}</span>"
+            f'<span class="sec-count">{count}건</span>'
+            "</div>"
+        ),
+        unsafe_allow_html=True
+    )
+
+    if category_data.empty:
+        st.markdown(
+            (
+                '<div class="empty-section-box">'
+                "최근 수집된 기사가 없습니다."
+                "</div>"
+            ),
+            unsafe_allow_html=True
+        )
+
+        return
+
+    # 기사 5개 이상일 때만 더보기 생성
+    if count >= 5:
+        top_items = category_data.iloc[
+            :4
+        ]
+
+        more_items = category_data.iloc[
+            4:
+        ]
+
+        top_html = "".join(
+            build_card_html(
+                row
+            )
+            for _, row
+            in top_items.iterrows()
+        )
+
+        st.markdown(
+            top_html,
+            unsafe_allow_html=True
+        )
+
+        with st.expander(
+            f"+{len(more_items)}개 더보기"
+        ):
+            more_html = "".join(
+                build_card_html(
+                    row
+                )
+                for _, row
+                in more_items.iterrows()
+            )
+
+            st.markdown(
+                more_html,
+                unsafe_allow_html=True
+            )
+
+    else:
+        all_html = "".join(
+            build_card_html(
+                row
+            )
+            for _, row
+            in category_data.iterrows()
+        )
+
+        st.markdown(
+            all_html,
+            unsafe_allow_html=True
+        )
+
+
+# ============================================================
+# 데이터 읽기
+# ============================================================
+
+modified_time = get_csv_modified_time()
+
+df = load_data(
+    CSV_FILE_PATH,
+    modified_time
+)
+
 
 if df.empty:
-    st.warning("⚠️ hr_news.csv 데이터가 존재하지 않습니다. python collector.py를 실행해 주세요.")
+    st.warning(
+        "수집된 뉴스가 없습니다. "
+        "`python collector.py`를 먼저 실행하세요."
+    )
+
+    st.stop()
+
+
+# ============================================================
+# 오늘의 스마일게이트
+# ============================================================
+
+smilegate_data = df[
+    df["category"]
+    == "오늘의 스마일게이트"
+]
+
+if not smilegate_data.empty:
+    smilegate_cards = "".join(
+        build_card_html(
+            row,
+            is_sg=True
+        )
+        for _, row
+        in smilegate_data.head(
+            5
+        ).iterrows()
+    )
+
+    smilegate_html = (
+        '<div class="sg-container">'
+        '<div class="sg-title">'
+        "🚀오늘의 스마일게이트"
+        "</div>"
+        f"{smilegate_cards}"
+        "</div>"
+    )
+
 else:
-    # A. 오늘의 스마일게이트 (체크포인트 없이 요약문만)
-    smile_df = df[df["category"] == "오늘의 스마일게이트"]
-    
-    smile_items_html = ""
-    if smile_df.empty:
-        smile_items_html = "<div style='font-size:12px; color:#94a3b8;'>최근 수집된 기사가 없습니다.</div>"
-    else:
-        for _, row in smile_df.head(5).iterrows():
-            date_str = row.get("date_str", "")
-            t = row.get("title", "")
-            s = row.get("summary", "")
-            l = row.get("link", "#")
-            
-            smile_items_html += f'<div class="news-hover-card smile-card"><div class="news-title-line"><span class="date-tag">{date_str}</span> {t}</div><div class="news-hover-desc"><div class="summary-box">{s}</div><a href="{l}" target="_blank" class="btn-read-more">기사 원문 보기 ➔</a></div></div>'
+    smilegate_html = (
+        '<div class="sg-container">'
+        '<div class="sg-title">'
+        "오늘의 스마일게이트"
+        "</div>"
+        '<div style="color:#94a3b8;font-size:11px;">'
+        "최근 스마일게이트 기사가 없습니다."
+        "</div>"
+        "</div>"
+    )
 
-    smile_full_html = f'<div class="smile-banner"><div class="smile-title">🚀 오늘의 스마일게이트</div>{smile_items_html}</div>'
-    st.markdown(smile_full_html, unsafe_allow_html=True)
+st.markdown(
+    smilegate_html,
+    unsafe_allow_html=True
+)
 
-    # B. HR 카테고리 렌더링
-    def render_section(cat_title):
-        sub_df = df[df["category"] == cat_title]
-        st.markdown(f'<div class="sec-title">⚖️ {cat_title} <span style="font-size:11px; font-weight:normal; color:#64748b;">({len(sub_df)}건)</span></div>', unsafe_allow_html=True)
-        
-        if sub_df.empty:
-            st.write("수집된 기사가 없습니다.")
-            return
 
-        for _, row in sub_df.iterrows():
-            date_str = row.get("date_str", "")
-            t = row.get("title", "")
-            s = row.get("summary", "")
-            l = row.get("link", "#")
+# ============================================================
+# 카테고리 배치
+# ============================================================
 
-            try:
-                checkpoints = json.loads(row.get("checkpoints", "[]"))
-            except:
-                checkpoints = []
+row1_col1, row1_col2 = st.columns(
+    2
+)
 
-            chk_html = "".join([f"<li>{chk}</li>" for chk in checkpoints])
+with row1_col1:
+    render_category_with_more(
+        df,
+        "HR 제도·조직운영",
+        "HR 제도·조직운영"
+    )
 
-            card_html = f'<div class="news-hover-card"><div class="news-title-line"><span class="date-tag">{date_str}</span> [국내] {t}</div><div class="news-hover-desc"><div class="section-label blue-label">📌 핵심 요약</div><div class="summary-box">{s}</div><div class="section-label green-label">✅ 실무 체크포인트</div><ul class="chk-list">{chk_html}</ul><a href="{l}" target="_blank" class="btn-read-more">원문 기사 보기 ➔</a></div></div>'
-            
-            st.markdown(card_html, unsafe_allow_html=True)
+with row1_col2:
+    render_category_with_more(
+        df,
+        "노동법·정책·판례",
+        "노동법·정책·판례"
+    )
 
-    col1, col2 = st.columns(2)
 
-    with col1:
-        render_section("HR 트렌드 섹션 (ai등HR/인사 트렌드)")
-        st.write("")
-        render_section("노사/ 노동 / 노조/보상/평가/성과급")
+st.markdown(
+    "<div style='height:22px;'></div>",
+    unsafe_allow_html=True
+)
 
-    with col2:
-        render_section("고용노동부/노동법/판례")
-        st.write("")
-        render_section("채용/조직문화")
+
+row2_col1, row2_col2 = st.columns(
+    2
+)
+
+with row2_col1:
+    render_category_with_more(
+        df,
+        "보상·노사관계",
+        "보상·노사관계"
+    )
+
+with row2_col2:
+    render_category_with_more(
+        df,
+        "채용·인력운영",
+        "채용·인력운영"
+    )
