@@ -14,9 +14,15 @@ import streamlit as st
 # 기본 설정
 # ============================================================
 
-CSV_FILE_PATH = (
-    r"D:\Local developing\HR-news dashboard\hr_news.csv"
-)
+#CSV_FILE_PATH = (
+#    r"D:\Local developing\HR-news dashboard\hr_news.csv"
+#)
+
+from pathlib import Path
+
+BASE_DIR = Path(__file__).parent
+CSV_FILE_PATH = BASE_DIR / "hr_news.csv"
+
 
 st.set_page_config(
     page_title="HR 뉴스 대시보드",

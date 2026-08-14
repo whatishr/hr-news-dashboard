@@ -44,16 +44,22 @@ urllib3.disable_warnings(
 # 경로 / 환경설정
 # ============================================================
 
-BASE_DIR = Path(
-    r"D:\Local developing\HR-news dashboard"
-)
+# 로컬에서 실행시 코드
+# BASE_DIR = Path(
+#    r"D:\Local developing\HR-news dashboard"
+#)
+
+#깃허브에서 실행시 코드
+BASE_DIR = Path(__file__).parent
 
 ENV_FILE_PATH = BASE_DIR / ".env"
 CSV_FILE_PATH = BASE_DIR / "hr_news.csv"
 STATUS_FILE_PATH = BASE_DIR / "collector_status.json"
 
-load_dotenv(ENV_FILE_PATH)
-
+if ENV_FILE_PATH.exists():
+    load_dotenv(dotenv_path=ENV_FILE_PATH)
+else:
+    load_dotenv() # 특정 경로를 강제하지 않아 시스템 환경변수가 정상 반영됩니다.
 NAVER_CLIENT_ID = (
     os.getenv("NAVER_CLIENT_ID")
     or os.getenv("CLIENT_ID")

@@ -1,0 +1,34 @@
+name: Daily News Collector
+
+on:
+  schedule:
+    # UTC 기준 오전 0시 = 한국 시간(KST) 오전 9시
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 필요할 때 깃허브에서 수동으로도 실행 가능하게 설정
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10' # 본인의 파이썬 버전으로 변경 가능
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run collector
+        run: python collector.py
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@://github.com"
+          git add .
+          git commit -m "auto: update news data" || echo "No changes to commit"
+          git push
