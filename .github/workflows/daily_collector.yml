@@ -23,11 +23,12 @@ jobs:
       - name: 필요 라이브러리 설치
         run: |
           python -m pip install --upgrade pip
-<<<<<<< Updated upstream
           pip install -r requirements.txt
-=======
-          pip install pandas requests urllib3 beautifulsoup4 python-dotenv trafilatura google-genai
->>>>>>> Stashed changes
+
+      - name: Gemini SDK 버전 확인
+        run: |
+          python --version
+          python -m pip show google-genai
 
       - name: 뉴스 수집 스크립트 실행
         env:
