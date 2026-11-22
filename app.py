@@ -75,7 +75,7 @@ st.markdown(
        오늘의 노타
        ============================================ */
 
-    .sg-container {
+    .nota-container {
         background-color: #1b2230;
         border: 1px solid #283244;
         border-radius: 9px;
@@ -85,7 +85,7 @@ st.markdown(
         box-shadow: 0 2px 8px rgba(15, 23, 42, 0.10);
     }
 
-    .sg-title {
+    .nota-title {
         font-size: 14px;
         font-weight: 700;
         color: #ffffff;
@@ -93,7 +93,7 @@ st.markdown(
         letter-spacing: -0.2px;
     }
 
-    .sg-card {
+    .nota-card {
         background-color: #242d3f;
         border: 1px solid #303b50;
         border-radius: 6px;
@@ -104,16 +104,16 @@ st.markdown(
             background-color 0.18s ease;
     }
 
-    .sg-card:last-child {
+    .nota-card:last-child {
         margin-bottom: 0;
     }
 
-    .sg-card:hover {
+    .nota-card:hover {
         border-color: #64748b;
         background-color: #293449;
     }
 
-    .sg-card-header {
+    .nota-card-header {
         padding: 8px 11px;
         font-size: 12px;
         font-weight: 600;
@@ -123,14 +123,14 @@ st.markdown(
         min-width: 0;
     }
 
-    .sg-date-tag {
+    .nota-date-tag {
         color: #60a5fa;
         font-weight: 700;
         margin-right: 8px;
         flex-shrink: 0;
     }
 
-    .sg-title-text {
+    .nota-title-text {
         display: block;
         min-width: 0;
         overflow: hidden;
@@ -138,7 +138,7 @@ st.markdown(
         white-space: nowrap;
     }
 
-    .sg-card-body {
+    .nota-card-body {
         max-height: 0;
         overflow: hidden;
         padding: 0 11px;
@@ -148,7 +148,7 @@ st.markdown(
             padding 0.25s ease-out;
     }
 
-    .sg-card:hover .sg-card-body {
+    .nota-card:hover .nota-card-body {
         max-height: 1800px !important;
         padding: 10px 11px;
         border-top: 1px solid #344056;
@@ -221,14 +221,14 @@ st.markdown(
        카드 상세 내용
        ============================================ */
 
-    .summary-title-sg {
+    .summary-title-nota {
         color: #fca5a5;
         font-weight: 700;
         font-size: 11px;
         margin-bottom: 4px;
     }
 
-    .summary-box-sg {
+    .summary-box-nota {
         font-size: 11px;
         color: #d6deea;
         line-height: 1.55;
@@ -681,7 +681,7 @@ def build_link_html(
 
 def build_card_html(
     row: pd.Series,
-    is_sg: bool = False
+    is_nota: bool = False
 ) -> str:
     checkpoints = parse_checkpoints(
         row.get(
@@ -753,21 +753,21 @@ def build_card_html(
         )
     )
 
-    if is_sg:
+    if is_nota:
         return (
-            '<div class="sg-card">'
-            '<div class="sg-card-header">'
-            f'<span class="sg-date-tag">{date_str}</span>'
-            f'<span class="sg-title-text" '
+            '<div class="nota-card">'
+            '<div class="nota-card-header">'
+            f'<span class="nota-date-tag">{date_str}</span>'
+            f'<span class="nota-title-text" '
             f'title="{clean_title}">'
             f"{clean_title}"
             "</span>"
             "</div>"
-            '<div class="sg-card-body">'
-            '<div class="summary-title-sg">'
+            '<div class="nota-card-body">'
+            '<div class="summary-title-nota">'
             "주요 요약"
             "</div>"
-            f'<div class="summary-box-sg">{summary}</div>'
+            f'<div class="summary-box-nota">{summary}</div>'
             f"{link_html}"
             "</div>"
             "</div>"
@@ -919,36 +919,36 @@ if df.empty:
 # 오늘의 노타
 # ============================================================
 
-smilegate_data = df[
+nota_data = df[
     df["category"]
     == "오늘의 노타"
 ]
 
-if not smilegate_data.empty:
-    smilegate_cards = "".join(
+if not nota_data.empty:
+    nota_cards = "".join(
         build_card_html(
             row,
-            is_sg=True
+            is_nota=True
         )
         for _, row
-        in smilegate_data.head(
+        in nota_data.head(
             5
         ).iterrows()
     )
 
-    smilegate_html = (
-        '<div class="sg-container">'
-        '<div class="sg-title">'
+    nota_html = (
+        '<div class="nota-container">'
+        '<div class="nota-title">'
         "🚀오늘의 노타"
         "</div>"
-        f"{smilegate_cards}"
+        f"{nota_cards}"
         "</div>"
     )
 
 else:
-    smilegate_html = (
-        '<div class="sg-container">'
-        '<div class="sg-title">'
+    nota_html = (
+        '<div class="nota-container">'
+        '<div class="nota-title">'
         "오늘의 노타"
         "</div>"
         '<div style="color:#94a3b8;font-size:11px;">'
@@ -958,7 +958,7 @@ else:
     )
 
 st.markdown(
-    smilegate_html,
+    nota_html,
     unsafe_allow_html=True
 )
 
