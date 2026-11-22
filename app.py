@@ -72,7 +72,7 @@ st.markdown(
     }
 
     /* ============================================
-       오늘의 스마일게이트
+       오늘의 노타
        ============================================ */
 
     .sg-container {
@@ -916,12 +916,12 @@ if df.empty:
 
 
 # ============================================================
-# 오늘의 스마일게이트
+# 오늘의 노타
 # ============================================================
 
 smilegate_data = df[
     df["category"]
-    == "오늘의 스마일게이트"
+    == "오늘의 노타"
 ]
 
 if not smilegate_data.empty:
@@ -939,7 +939,7 @@ if not smilegate_data.empty:
     smilegate_html = (
         '<div class="sg-container">'
         '<div class="sg-title">'
-        "🚀오늘의 스마일게이트"
+        "🚀오늘의 노타"
         "</div>"
         f"{smilegate_cards}"
         "</div>"
@@ -949,10 +949,10 @@ else:
     smilegate_html = (
         '<div class="sg-container">'
         '<div class="sg-title">'
-        "오늘의 스마일게이트"
+        "오늘의 노타"
         "</div>"
         '<div style="color:#94a3b8;font-size:11px;">'
-        "최근 스마일게이트 기사가 없습니다."
+        "최근 노타 관련 기사가 없습니다."
         "</div>"
         "</div>"
     )
